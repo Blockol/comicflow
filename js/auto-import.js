@@ -30,17 +30,6 @@
   }
   if (typeof dbGetAll === 'undefined') return;
 
-  // Check if music already exists
-  try {
-    const existing = await dbGetAll('music');
-    if (existing.length > 0) {
-      localStorage.setItem(IMPORT_KEY, '1');
-      return;
-    }
-  } catch(e) {
-    return;
-  }
-
   console.log('[AutoImport] Importiere Musik-Dateien...');
 
   let imported = 0;
