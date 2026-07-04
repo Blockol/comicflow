@@ -4,8 +4,8 @@
 *.mhtml
 Iron Man*/
 
-# Music files (too large for GitHub)
-music/
+# Unused music
+music/Gravity_Anchor- unused.mp3
 
 # Old/unused libs
 lib/archive.js
