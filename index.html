@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ComicFlow</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <a href="index.html" class="nav-brand">ComicFlow</a>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">Bibliothek</a></li>
+      <li><a href="admin.html">Verwaltung</a></li>
+    </ul>
+  </nav>
+
+  <main class="main">
+    <div class="container">
+      <div class="hero">
+        <div class="hero-label">Deine Sammlung</div>
+        <h1>Lese mit<br>Atmosphäre.</h1>
+        <p>Comics und Bücher mit passender Hintergrundmusik erleben. Jede Seite bekommt ihren eigenen Soundtrack.</p>
+      </div>
+
+      <div id="library" class="library-grid"></div>
+
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-state-icon">&#9839;</div>
+        <h3>Noch keine PDFs vorhanden</h3>
+        <p>Gehe zur Verwaltung, um PDFs und Musik hochzuladen.</p>
+        <a href="admin.html" class="btn btn-accent">Zur Verwaltung</a>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toasts"></div>
+
+  <script src="js/db.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

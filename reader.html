@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ComicFlow - Reader</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+  <nav class="nav">
+    <a href="index.html" class="nav-brand">ComicFlow</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Bibliothek</a></li>
+      <li><a href="admin.html">Verwaltung</a></li>
+    </ul>
+  </nav>
+
+  <div class="reader-container" id="readerContainer">
+    <div class="reader-canvas-wrapper">
+      <canvas id="pdfCanvas"></canvas>
+    </div>
+  </div>
+
+  <div class="reader-controls">
+    <button class="reader-btn" id="prevBtn" title="Vorherige Seite">&#8592;</button>
+    <div class="reader-page-info" id="pageInfo">- / -</div>
+    <button class="reader-btn" id="nextBtn" title="Nächste Seite">&#8594;</button>
+
+    <div class="reader-music-indicator" id="musicIndicator" style="display:none;">
+      <div class="music-bars">
+        <div class="music-bar"></div>
+        <div class="music-bar"></div>
+        <div class="music-bar"></div>
+        <div class="music-bar"></div>
+      </div>
+      <span class="reader-music-name" id="musicName"></span>
+    </div>
+
+    <div class="volume-control">
+      <span class="volume-icon" id="volumeIcon">&#9835;</span>
+      <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.5">
+    </div>
+  </div>
+
+  <div class="toast-container" id="toasts"></div>
+
+  <script src="js/db.js"></script>
+  <script src="js/reader.js"></script>
+</body>
+</html>

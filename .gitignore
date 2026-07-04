@@ -1,0 +1,23 @@
+# Comic files (too large + copyright)
+*.cbr
+*.cbz
+*.mhtml
+Iron Man*/
+
+# Music files (too large for GitHub)
+music/
+
+# Old/unused libs
+lib/archive.js
+lib/archive-bundle.js
+lib/worker-bundle.js
+lib/wasm-gen/
+
+# Python scripts
+*.py
+
+# Claude settings
+.claude/
+
+# Memory
+MEMORY.md
