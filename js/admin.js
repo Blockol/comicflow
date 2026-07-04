@@ -761,4 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Init ──
   loadPdfList();
   loadMusicList();
+
+  // Refresh music list after auto-import
+  window.addEventListener('music-imported', () => loadMusicList());
 });

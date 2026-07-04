@@ -23,12 +23,21 @@
   ];
 
   // Wait for DB to be ready
-  await new Promise(r => setTimeout(r, 500));
+  let retries = 0;
+  while (typeof dbGetAll === 'undefined' && retries < 20) {
+    await new Promise(r => setTimeout(r, 250));
+    retries++;
+  }
+  if (typeof dbGetAll === 'undefined') return;
 
   // Check if music already exists
-  const existing = await dbGetAll('music');
-  if (existing.length > 0) {
-    localStorage.setItem(IMPORT_KEY, '1');
+  try {
+    const existing = await dbGetAll('music');
+    if (existing.length > 0) {
+      localStorage.setItem(IMPORT_KEY, '1');
+      return;
+    }
+  } catch(e) {
     return;
   }
 
@@ -43,13 +52,16 @@
       const name = filename.replace(/\.mp3$/i, '').replace(/_/g, ' ');
       await dbAdd('music', { name, data: arrayBuffer, type: 'audio/mpeg' });
       imported++;
+      console.log(`[AutoImport] ${imported}/${musicFiles.length}: ${name}`);
     } catch(e) {
       console.warn('[AutoImport] Fehler bei', filename, e);
     }
   }
 
   if (imported > 0) {
-    console.log(`[AutoImport] ${imported} Musik-Dateien importiert`);
+    console.log(`[AutoImport] Fertig! ${imported} Musik-Dateien importiert`);
     localStorage.setItem(IMPORT_KEY, '1');
+    // Notify admin page to refresh music list
+    window.dispatchEvent(new Event('music-imported'));
   }
 })();
