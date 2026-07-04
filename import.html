@@ -2,13 +2,46 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>ComicFlow - Musik Import</title>
-  <style>body{background:#0a0a0a;color:#e8e8e8;font-family:sans-serif;padding:2rem;text-align:center}#log{text-align:left;max-width:600px;margin:2rem auto;font-size:14px}button{background:#c8a87e;color:#000;border:none;padding:12px 24px;font-size:16px;cursor:pointer;border-radius:6px}</style>
+  <title>ComicFlow - Import / Export</title>
+  <style>
+    body{background:#0a0a0a;color:#e8e8e8;font-family:sans-serif;padding:2rem;max-width:700px;margin:0 auto}
+    h1{color:#c8a87e;margin-bottom:0.5rem}
+    h2{color:#c8a87e;margin-top:2rem;font-size:1.1rem;border-top:1px solid #222;padding-top:1.5rem}
+    button{background:#c8a87e;color:#000;border:none;padding:10px 20px;font-size:14px;cursor:pointer;border-radius:6px;margin:0.5rem 0.5rem 0.5rem 0}
+    button:hover{background:#d4b88e}
+    #log{text-align:left;margin:1rem 0;font-size:13px;line-height:1.8;background:#111;padding:1rem;border-radius:6px;max-height:400px;overflow-y:auto}
+    textarea{width:100%;height:150px;background:#111;color:#e8e8e8;border:1px solid #333;border-radius:6px;padding:0.5rem;font-size:12px;font-family:monospace}
+    a{color:#c8a87e}
+    .section{margin-bottom:1rem}
+  </style>
 </head>
 <body>
-  <h1>Musik Import</h1>
-  <button onclick="runImport()">Alle Musik importieren</button>
+  <h1>ComicFlow Tools</h1>
+  <p><a href="admin.html">&larr; Zurück zur Verwaltung</a></p>
+
+  <!-- Music Import -->
+  <h2>1. Musik importieren</h2>
+  <p>Importiert alle mitgelieferten Musik-Dateien in die lokale Datenbank.</p>
+  <button onclick="runMusicImport()">Alle Musik importieren</button>
+
+  <!-- Export Mappings -->
+  <h2>2. Zuweisungen exportieren (lokale Seite)</h2>
+  <p>Exportiert alle Musik-Zuweisungen als JSON. Nutze das auf deiner <strong>lokalen</strong> Seite.</p>
+  <button onclick="exportMappings()">Zuweisungen exportieren</button>
+  <div class="section">
+    <textarea id="exportData" placeholder="Hier erscheinen die exportierten Daten..." readonly></textarea>
+  </div>
+
+  <!-- Import Mappings -->
+  <h2>3. Zuweisungen importieren (Online-Seite)</h2>
+  <p>Füge die exportierten JSON-Daten ein und importiere sie. PDFs und Musik müssen bereits vorhanden sein (gleiche Namen).</p>
+  <div class="section">
+    <textarea id="importData" placeholder="JSON-Daten hier einfügen..."></textarea>
+  </div>
+  <button onclick="importMappings()">Zuweisungen importieren</button>
+
   <div id="log"></div>
+
   <script src="js/db.js"></script>
   <script>
     const musicFiles = [
@@ -31,11 +64,19 @@
     ];
 
     function log(msg) {
-      document.getElementById('log').innerHTML += msg + '<br>';
+      const el = document.getElementById('log');
+      el.innerHTML += msg + '<br>';
+      el.scrollTop = el.scrollHeight;
     }
 
-    async function runImport() {
-      log('Starte Import...');
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // ── Music Import ──
+    async function runMusicImport() {
+      clearLog();
+      log('Starte Musik-Import...');
       let count = 0;
       for (const filename of musicFiles) {
         try {
@@ -50,8 +91,102 @@
           log('FEHLER: ' + filename + ' - ' + e.message);
         }
       }
-      log('Fertig! ' + count + ' Dateien importiert.');
+      log('<strong>Fertig! ' + count + ' Musik-Dateien importiert.</strong>');
       localStorage.setItem('comicflow_music_imported_v1', '1');
+    }
+
+    // ── Export Mappings ──
+    async function exportMappings() {
+      clearLog();
+      log('Exportiere Zuweisungen...');
+
+      const pdfs = await dbGetAll('pdfs');
+      const music = await dbGetAll('music');
+      const mappings = await dbGetAll('mappings');
+
+      if (mappings.length === 0) {
+        log('Keine Zuweisungen vorhanden.');
+        return;
+      }
+
+      const exportData = mappings.map(m => {
+        const pdf = pdfs.find(p => p.id === m.pdfId);
+        const mus = music.find(mu => mu.id === m.musicId);
+        return {
+          pdfName: pdf ? pdf.name : null,
+          page: m.page,
+          musicName: mus ? mus.name : null,
+        };
+      }).filter(e => e.pdfName && e.musicName);
+
+      const json = JSON.stringify(exportData, null, 2);
+      document.getElementById('exportData').value = json;
+
+      // Copy to clipboard
+      try {
+        await navigator.clipboard.writeText(json);
+        log(exportData.length + ' Zuweisungen exportiert und in Zwischenablage kopiert!');
+      } catch(e) {
+        log(exportData.length + ' Zuweisungen exportiert. Bitte manuell kopieren (Ctrl+A im Textfeld, dann Ctrl+C).');
+      }
+    }
+
+    // ── Import Mappings ──
+    async function importMappings() {
+      clearLog();
+      const raw = document.getElementById('importData').value.trim();
+      if (!raw) {
+        log('Bitte JSON-Daten einfügen.');
+        return;
+      }
+
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch(e) {
+        log('Ungültiges JSON: ' + e.message);
+        return;
+      }
+
+      if (!Array.isArray(data) || data.length === 0) {
+        log('Keine Zuweisungen in den Daten gefunden.');
+        return;
+      }
+
+      log('Lade lokale PDFs und Musik...');
+      const pdfs = await dbGetAll('pdfs');
+      const music = await dbGetAll('music');
+
+      let imported = 0;
+      let skipped = 0;
+
+      for (const entry of data) {
+        const pdf = pdfs.find(p => p.name === entry.pdfName);
+        const mus = music.find(m => m.name === entry.musicName);
+
+        if (!pdf) {
+          log('SKIP Seite ' + entry.page + ': PDF "' + entry.pdfName + '" nicht gefunden');
+          skipped++;
+          continue;
+        }
+        if (!mus) {
+          log('SKIP Seite ' + entry.page + ': Musik "' + entry.musicName + '" nicht gefunden');
+          skipped++;
+          continue;
+        }
+
+        // Check if mapping already exists
+        const existing = await dbGetByIndex('mappings', 'pdfId', pdf.id);
+        const exists = existing.find(m => m.page === entry.page);
+        if (exists) {
+          await dbDelete('mappings', exists.id);
+        }
+
+        await dbAdd('mappings', { pdfId: pdf.id, page: entry.page, musicId: mus.id });
+        imported++;
+      }
+
+      log('<strong>Fertig! ' + imported + ' Zuweisungen importiert, ' + skipped + ' übersprungen.</strong>');
     }
   </script>
 </body>
