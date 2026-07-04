@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>ComicFlow - Musik Import</title>
+  <style>body{background:#0a0a0a;color:#e8e8e8;font-family:sans-serif;padding:2rem;text-align:center}#log{text-align:left;max-width:600px;margin:2rem auto;font-size:14px}button{background:#c8a87e;color:#000;border:none;padding:12px 24px;font-size:16px;cursor:pointer;border-radius:6px}</style>
+</head>
+<body>
+  <h1>Musik Import</h1>
+  <button onclick="runImport()">Alle Musik importieren</button>
+  <div id="log"></div>
+  <script src="js/db.js"></script>
+  <script>
+    const musicFiles = [
+      'A_Pending_Breakdown.mp3',
+      'Beneath_the_Partition.mp3',
+      'Hydraulic_Seizure.mp3',
+      'The Final Stand (1).mp3',
+      'The Final Stand.mp3',
+      'The_Distant_Siege.mp3',
+      'The_Iron_Pulse.mp3',
+      'The_Last_Unanswered_Note.mp3',
+      'The_Room_Next_Door.mp3',
+      'Titanium_Stride (1).mp3',
+      'Titanium_Stride.mp3',
+      'beneath the floor.mp3',
+      'calm, light dramtic then action drop later.mp3',
+      'emotional, quit, light.mp3',
+      'light dramatic, long walk, building up but no drop, evil plan.mp3',
+      'mid dramatik, long walk, building up, but no drop.mp3',
+    ];
+
+    function log(msg) {
+      document.getElementById('log').innerHTML += msg + '<br>';
+    }
+
+    async function runImport() {
+      log('Starte Import...');
+      let count = 0;
+      for (const filename of musicFiles) {
+        try {
+          const resp = await fetch('music/' + encodeURIComponent(filename));
+          if (!resp.ok) { log('SKIP ' + filename + ' (' + resp.status + ')'); continue; }
+          const data = await resp.arrayBuffer();
+          const name = filename.replace(/\.mp3$/i, '').replace(/_/g, ' ');
+          await dbAdd('music', { name: name, data: data, type: 'audio/mpeg' });
+          count++;
+          log(count + '/' + musicFiles.length + ': ' + name);
+        } catch(e) {
+          log('FEHLER: ' + filename + ' - ' + e.message);
+        }
+      }
+      log('Fertig! ' + count + ' Dateien importiert.');
+      localStorage.setItem('comicflow_music_imported_v1', '1');
+    }
+  </script>
+</body>
+</html>
