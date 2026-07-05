@@ -187,27 +187,33 @@ const GitHubSync = (() => {
     // Apply mappings: add only where no local mapping exists for that pdf+page
     const localMappings = await dbGetAll('mappings');
     let mappingsAdded = 0;
+    let mappingsSkipped = 0;
+    let mappingsNotFound = 0;
     for (const sm of syncData.mappings || []) {
       const pdf = pdfs.find(p => p.name === sm.pdfName);
       const mus = music.find(m => m.name === sm.musicName);
-      if (pdf && mus) {
-        // Only add if no local mapping exists for this pdf+page
-        const existing = localMappings.find(lm =>
-          lm.pdfId === pdf.id && lm.page === sm.page
-        );
-        if (!existing) {
-          await dbAdd('mappings', {
-            pdfId: pdf.id,
-            page: sm.page,
-            musicId: mus.id,
-          });
-          mappingsAdded++;
-        }
+      if (!pdf || !mus) {
+        mappingsNotFound++;
+        if (!pdf) console.log(`[GITHUB] PDF nicht gefunden: "${sm.pdfName}"`);
+        if (!mus) console.log(`[GITHUB] Musik nicht gefunden: "${sm.musicName}"`);
+        continue;
+      }
+      // Only add if no local mapping exists for this pdf+page
+      const existing = localMappings.find(lm =>
+        lm.pdfId === pdf.id && lm.page === sm.page
+      );
+      if (!existing) {
+        await dbAdd('mappings', {
+          pdfId: pdf.id,
+          page: sm.page,
+          musicId: mus.id,
+        });
+        mappingsAdded++;
+      } else {
+        mappingsSkipped++;
       }
     }
-    if (mappingsAdded > 0) {
-      console.log(`[GITHUB] ${mappingsAdded} Zuweisungen synchronisiert`);
-    }
+    console.log(`[GITHUB] Mappings: ${mappingsAdded} neu, ${mappingsSkipped} vorhanden, ${mappingsNotFound} nicht gefunden`);
 
     // Apply music descriptions
     for (const md of syncData.musicDescriptions || []) {
