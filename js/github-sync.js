@@ -261,17 +261,23 @@ const GitHubSync = (() => {
   }
 
   // Quick save (just push current state, no merge)
-  async function quickSave() {
+  async function quickSave(retries = 2) {
     if (!isConfigured()) return;
-    try {
-      // Reload SHA first to avoid conflicts
-      await loadFromGitHub();
-      const data = await buildSyncData();
-      console.log('[GITHUB] Saving:', data.mappings.length, 'mappings,', data.fileRegistry.length, 'files');
-      await saveToGitHub(data);
-      console.log('[GITHUB] Quick save OK');
-    } catch (e) {
-      console.error('[GITHUB] Quick save failed:', e);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await loadFromGitHub();
+        const data = await buildSyncData();
+        console.log('[GITHUB] Saving:', data.mappings.length, 'mappings,', data.fileRegistry.length, 'files');
+        await saveToGitHub(data);
+        console.log('[GITHUB] Quick save OK');
+        return;
+      } catch (e) {
+        console.error(`[GITHUB] Quick save attempt ${attempt}/${retries} failed:`, e.message);
+        if (attempt < retries) {
+          _fileSha = null; // Reset SHA for retry
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
     }
   }
 
