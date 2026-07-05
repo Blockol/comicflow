@@ -90,6 +90,14 @@ async function init() {
     return;
   }
 
+  // Sync mappings from GitHub before loading
+  try {
+    if (GitHubSync.isConfigured()) {
+      const remote = await GitHubSync.loadFromGitHub();
+      if (remote) await GitHubSync.applySyncData(remote);
+    }
+  } catch(e) { console.log('GitHub sync skipped:', e.message); }
+
   let record = await dbGet('pdfs', state.pdfId);
 
   // If not in IndexedDB, try syncing from server
