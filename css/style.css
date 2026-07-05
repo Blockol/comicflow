@@ -954,11 +954,11 @@ select.form-input {
   opacity: 0;
 }
 
-/* Book turn: next — old page rotates away, fades out only at the very end */
+/* Book turn: next — old page rotates fully behind the left edge */
 @keyframes bookTurnNext {
   0%   { transform: rotateY(0deg); opacity: 1; }
-  90%  { transform: rotateY(-81deg); opacity: 1; }
-  100% { transform: rotateY(-90deg); opacity: 0; }
+  85%  { opacity: 1; }
+  100% { transform: rotateY(-120deg); opacity: 0; }
 }
 
 @keyframes bookShadowNext {
@@ -968,10 +968,10 @@ select.form-input {
   100% { opacity: 0; }
 }
 
-/* Book turn: prev — new page swings in, fades in right at the start */
+/* Book turn: prev — new page swings in from behind the left edge */
 @keyframes bookTurnPrev {
-  0%   { transform: rotateY(-90deg); opacity: 0; }
-  10%  { transform: rotateY(-81deg); opacity: 1; }
+  0%   { transform: rotateY(-120deg); opacity: 0; }
+  15%  { opacity: 1; }
   100% { transform: rotateY(0deg); opacity: 1; }
 }
 
