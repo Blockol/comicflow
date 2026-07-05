@@ -1,7 +1,14 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
+
+  // Sync from GitHub on admin page load (so assignments from other devices appear)
+  try {
+    const remote = await GitHubSync.loadFromGitHub();
+    if (remote) await GitHubSync.applySyncData(remote);
+    console.log('[ADMIN] GitHub sync done');
+  } catch(e) { console.log('[ADMIN] GitHub sync skipped:', e.message); }
 
   // ── State ──
   let selectedPages = new Set();
