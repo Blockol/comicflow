@@ -182,21 +182,34 @@ const GitHubSync = (() => {
       }
     }
 
-    // Apply mappings (only if local has no mappings yet)
+    // Apply mappings (merge: add missing ones)
     const localMappings = await dbGetAll('mappings');
-    if (localMappings.length === 0 && (syncData.mappings || []).length > 0) {
-      for (const sm of syncData.mappings) {
-        const pdf = pdfs.find(p => p.name === sm.pdfName);
-        const mus = music.find(m => m.name === sm.musicName);
-        if (pdf && mus) {
+    let mappingsAdded = 0;
+    for (const sm of syncData.mappings || []) {
+      const pdf = pdfs.find(p => p.name === sm.pdfName);
+      const mus = music.find(m => m.name === sm.musicName);
+      if (pdf && mus) {
+        // Check if this mapping already exists locally
+        const exists = localMappings.find(lm =>
+          lm.pdfId === pdf.id && lm.page === sm.page && lm.musicId === mus.id
+        );
+        if (!exists) {
+          // Remove any existing mapping for same pdf+page before adding
+          const conflicting = localMappings.find(lm =>
+            lm.pdfId === pdf.id && lm.page === sm.page
+          );
+          if (conflicting) await dbDelete('mappings', conflicting.id);
           await dbAdd('mappings', {
             pdfId: pdf.id,
             page: sm.page,
             musicId: mus.id,
           });
+          mappingsAdded++;
         }
       }
-      console.log(`[GITHUB] ${syncData.mappings.length} Zuweisungen importiert`);
+    }
+    if (mappingsAdded > 0) {
+      console.log(`[GITHUB] ${mappingsAdded} Zuweisungen synchronisiert`);
     }
 
     // Apply music descriptions

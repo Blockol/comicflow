@@ -14,10 +14,24 @@ function showToast(msg, type = 'success') {
 }
 
 // Library page
+async function waitForAutoImport(timeout = 15000) {
+  const IMPORT_KEY = 'comicflow_music_imported_v1';
+  if (localStorage.getItem(IMPORT_KEY)) return;
+  // Wait for auto-import to finish
+  return new Promise(resolve => {
+    const handler = () => { window.removeEventListener('music-imported', handler); resolve(); };
+    window.addEventListener('music-imported', handler);
+    setTimeout(() => { window.removeEventListener('music-imported', handler); resolve(); }, timeout);
+  });
+}
+
 async function loadLibrary() {
   const grid = document.getElementById('library');
   const empty = document.getElementById('emptyState');
   if (!grid) return;
+
+  // Wait for auto-import to finish first (so music exists in DB for mapping sync)
+  await waitForAutoImport();
 
   // Sync from server if local (re-imports files + mappings lost from IndexedDB)
   try {
@@ -25,7 +39,7 @@ async function loadLibrary() {
     await ServerSync.restoreMappingsFromServer();
   } catch(e) { console.log('Server sync skipped:', e.message); }
 
-  // Sync from GitHub (mappings, sort order)
+  // Sync from GitHub (mappings, sort order, descriptions)
   try {
     if (GitHubSync.isConfigured()) {
       const remote = await GitHubSync.loadFromGitHub();
