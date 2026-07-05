@@ -199,13 +199,12 @@ async function animateBookTurn(num, direction) {
   if (existing) existing.remove();
 
   // Capture current page as image
-  const snapshot = canvas.toDataURL('image/jpeg', 0.85);
+  const oldSnapshot = canvas.toDataURL('image/jpeg', 0.85);
 
-  // Render new page underneath
+  // Render new page on canvas
   if (state.fileType === 'cbr') await renderCBRPage(num);
   else await renderPDFPage(num);
 
-  // Create overlay with old page snapshot
   const wrapper = document.querySelector('.reader-canvas-wrapper');
   const overlay = document.createElement('div');
   overlay.className = 'page-turn-overlay';
@@ -220,14 +219,37 @@ async function animateBookTurn(num, direction) {
   overlay.style.left = (rect.left - wrapperRect.left) + 'px';
   overlay.style.top = (rect.top - wrapperRect.top) + 'px';
 
-  const img = document.createElement('img');
-  img.src = snapshot;
-  const shadow = document.createElement('div');
-  shadow.className = 'page-shadow';
+  if (direction === 'next') {
+    // Forward: old page peels away from right to left (pivot left/spine)
+    const img = document.createElement('img');
+    img.src = oldSnapshot;
+    const shadow = document.createElement('div');
+    shadow.className = 'page-shadow';
+    overlay.appendChild(img);
+    overlay.appendChild(shadow);
+    overlay.classList.add('turn-next');
+  } else {
+    // Backward: new page swings in from the left (pivot left/spine)
+    // Old page stays visible as static background
+    const newSnapshot = canvas.toDataURL('image/jpeg', 0.85);
 
-  overlay.appendChild(img);
-  overlay.appendChild(shadow);
-  overlay.classList.add(direction === 'next' ? 'turn-next' : 'turn-prev');
+    const bgImg = document.createElement('img');
+    bgImg.src = oldSnapshot;
+    bgImg.className = 'page-turn-bg';
+
+    const animImg = document.createElement('img');
+    animImg.src = newSnapshot;
+    animImg.className = 'page-turn-anim';
+
+    const shadow = document.createElement('div');
+    shadow.className = 'page-shadow';
+
+    overlay.appendChild(bgImg);
+    overlay.appendChild(animImg);
+    overlay.appendChild(shadow);
+    overlay.classList.add('turn-prev');
+  }
+
   wrapper.appendChild(overlay);
 
   // Remove overlay after animation
