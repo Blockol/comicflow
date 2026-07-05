@@ -876,6 +876,7 @@ select.form-input {
   padding: 1rem;
   padding-top: 5rem;
   min-height: 100vh;
+  overflow: visible;
 }
 
 .reader-canvas-wrapper {
@@ -884,6 +885,7 @@ select.form-input {
   width: 100%;
   display: flex;
   justify-content: center;
+  overflow: visible;
 }
 
 .reader-canvas-wrapper canvas {
@@ -1303,7 +1305,7 @@ select.form-input {
   .reader-container { padding-top: 3.5rem; }
   .reader-controls { padding: 0.5rem 0.6rem; gap: 0.4rem; }
   .reader-btn { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
-  .reader-canvas-wrapper { overflow: hidden; touch-action: none; }
+  .reader-canvas-wrapper { overflow: visible; touch-action: none; }
 
   /* Page preview */
   .page-preview-bar {

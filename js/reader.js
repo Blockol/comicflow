@@ -435,7 +435,6 @@ function setupControls() {
         e.touches[0].clientY - e.touches[1].clientY
       );
       currentZoom = Math.max(1, Math.min(pinchStartZoom * (dist / initialPinchDist), 5));
-      if (currentZoom <= 1) { panX = 0; panY = 0; }
       applyTransform();
     } else if (e.touches.length === 1 && isPanning && currentZoom > 1.05) {
       e.preventDefault();
@@ -448,7 +447,17 @@ function setupControls() {
 
   wrapper.addEventListener('touchend', e => {
     if (e.touches.length < 2) initialPinchDist = 0;
-    if (e.touches.length === 0) isPanning = false;
+    if (e.touches.length === 0) {
+      isPanning = false;
+      // Smooth snap back to center when zoomed out to 1x
+      if (currentZoom <= 1.01 && (panX !== 0 || panY !== 0)) {
+        canvas.classList.add('animating');
+        panX = 0; panY = 0;
+        currentZoom = 1;
+        applyTransform();
+        setTimeout(() => canvas.classList.remove('animating'), 350);
+      }
+    }
   });
 
   // Swipe gestures: left/right = page, down = immersive, up = exit immersive
