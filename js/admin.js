@@ -1019,7 +1019,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const pageData = currentPdfRecord.pages[pageNum - 1];
       if (!pageData) return null;
       const blob = new Blob([pageData.data], { type: pageData.type || 'image/jpeg' });
-      const url = await blobToDataURL(blob, 200);
+      const thumbSize = Math.round(200 * (window.devicePixelRatio || 1));
+      const url = await blobToDataURL(blob, thumbSize);
       thumbCache[pageNum] = url;
       return url;
     }
@@ -1027,7 +1028,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (type === 'pdf' && currentPdfDoc) {
       try {
         const page = await currentPdfDoc.getPage(pageNum);
-        const vp = page.getViewport({ scale: 0.3 });
+        const dpr = window.devicePixelRatio || 1;
+        const vp = page.getViewport({ scale: 0.3 * dpr });
         const cvs = document.createElement('canvas');
         cvs.width = vp.width;
         cvs.height = vp.height;
