@@ -49,10 +49,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   document.getElementById('pdfSaveBtn').addEventListener('click', async () => {
-    const name = document.getElementById('pdfName').value.trim();
-    const file = document.getElementById('pdfFile').files[0];
-    if (!name || !file) {
-      showToast('Name und Datei erforderlich', 'error');
+    const nameField = document.getElementById('pdfName').value.trim();
+    const files = document.getElementById('pdfFile').files;
+    if (!files.length) {
+      showToast('Datei(en) erforderlich', 'error');
       return;
     }
 
@@ -61,16 +61,13 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.textContent = 'Wird verarbeitet...';
 
     try {
-      const ext = file.name.split('.').pop().toLowerCase();
-      const isCBR = ext === 'cbr' || ext === 'rar';
-
-      if (isCBR) {
-        await saveCBR(name, file);
-      } else {
-        await savePDF(name, file);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        // Use custom name for single file, otherwise filename
+        const name = (files.length === 1 && nameField) ? nameField : file.name.replace(/\.[^.]+$/, '');
+        await uploadComicFile(file, name);
+        showToast(`"${name}" hinzugefügt`);
       }
-
-      showToast(`"${name}" hinzugefügt`);
       closePdfModal();
       loadPdfList();
     } catch (e) {
@@ -82,9 +79,87 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  async function savePDF(name, file) {
+  // ── Unified upload: saves to server (if local) + IndexedDB ──
+  async function uploadComicFile(file, name) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const isCBR = ext === 'cbr' || ext === 'rar';
+    let serverId = null;
+
+    // Upload to server if running locally
+    if (await ServerSync.isLocalServer()) {
+      const result = await ServerSync.uploadComic(file);
+      serverId = result.id;
+    }
+
+    if (isCBR) {
+      await saveCBR(name, file, serverId);
+    } else {
+      await savePDF(name, file, serverId);
+    }
+  }
+
+  // ── Drag & Drop for PDFs/CBRs (same pattern as working music drop) ──
+  const pdfDropTarget = document.getElementById('tab-pdfs');
+  const pdfDropZone = document.getElementById('pdfDropZone');
+
+  // Only react to external file drops (from OS), not internal reorder drags
+  function isFileDrag(e) {
+    return e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes('text/plain');
+  }
+
+  pdfDropTarget.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    if (pdfDropZone) pdfDropZone.classList.add('drag-over');
+  });
+
+  pdfDropTarget.addEventListener('dragleave', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    if (pdfDropZone) pdfDropZone.classList.remove('drag-over');
+  });
+
+  pdfDropTarget.addEventListener('drop', async (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    if (pdfDropZone) pdfDropZone.classList.remove('drag-over');
+
+    const allFiles = [...e.dataTransfer.files];
+    console.log('[DROP] Dateien:', allFiles.map(f => `${f.name} (type=${f.type})`));
+
+    const files = allFiles.filter(f => {
+      const ext = f.name.split('.').pop().toLowerCase();
+      return ext === 'pdf' || ext === 'cbr' || ext === 'rar'
+        || f.type === 'application/pdf'
+        || f.type === 'application/x-cbr'
+        || f.type === 'application/x-rar-compressed'
+        || f.type === 'application/vnd.rar';
+    });
+
+    if (files.length === 0) {
+      showToast(`Keine PDF/CBR-Dateien erkannt (${allFiles.length} Datei(en) ignoriert)`, 'error');
+      return;
+    }
+
+    showToast(`${files.length} Datei(en) werden importiert...`);
+
+    for (const file of files) {
+      const name = file.name.replace(/\.[^.]+$/, '');
+      try {
+        await uploadComicFile(file, name);
+        showToast(`"${name}" hinzugefügt`);
+      } catch (err) {
+        console.error('Upload failed:', file.name, err);
+        showToast(`Fehler bei "${name}": ${err.message}`, 'error');
+      }
+    }
+
+    loadPdfList();
+  });
+
+  async function savePDF(name, file, serverId) {
     const arrayBuffer = await file.arrayBuffer();
-    const storageBuffer = arrayBuffer.slice(0); // Kopie, da PDF.js den Original-Buffer detached
+    const storageBuffer = arrayBuffer.slice(0);
     let pageCount = 0;
     let cover = null;
     try {
@@ -101,15 +176,19 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error('PDF processing error:', e);
     }
-    await dbAdd('pdfs', { name, type: 'pdf', data: storageBuffer, pageCount, cover });
+    await dbAdd('pdfs', { name, type: 'pdf', data: storageBuffer, pageCount, cover, serverId: serverId || null });
+
+    // Update server metadata
+    if (serverId && (pageCount || cover)) {
+      try { await ServerSync.updateComic(serverId, { pageCount, cover }); } catch {}
+    }
   }
 
-  async function saveCBR(name, file) {
+  async function saveCBR(name, file, serverId) {
     showToast('CBR wird verarbeitet...');
     try {
       const arrayBuffer = await file.arrayBuffer();
 
-      // Load WASM binary
       const wasmResp = await fetch('lib/unrar.wasm');
       const wasmBinary = await wasmResp.arrayBuffer();
 
@@ -128,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (imageExts.includes(fExt) && entry.extraction) {
           images.push({
             name: fName,
-            data: entry.extraction,  // Uint8Array
+            data: entry.extraction,
           });
         }
       }
@@ -140,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Detect MIME type from extension
       function getMime(name) {
         const ext = name.split('.').pop().toLowerCase();
         const map = { jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', gif:'image/gif', bmp:'image/bmp', webp:'image/webp' };
@@ -162,8 +240,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       await dbAdd('pdfs', {
         name, type: 'cbr', data: null,
-        pages, pageCount: pages.length, cover
+        pages, pageCount: pages.length, cover, serverId: serverId || null
       });
+
+      if (serverId && (pages.length || cover)) {
+        try { await ServerSync.updateComic(serverId, { pageCount: pages.length, cover }); } catch {}
+      }
     } catch (e) {
       console.error('CBR processing failed', e);
       showToast('CBR-Fehler: ' + e, 'error');
@@ -188,31 +270,221 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── PDF List ──
+  let serverComicsCache = [];
+
   async function loadPdfList() {
     const pdfs = await dbGetAll('pdfs');
     const list = document.getElementById('pdfList');
     const empty = document.getElementById('pdfEmpty');
 
-    if (pdfs.length === 0) {
+    // Fetch server status if local
+    let serverComics = [];
+    const isLocal = await ServerSync.isLocalServer();
+    if (isLocal) {
+      try {
+        serverComics = await ServerSync.getComics();
+        serverComicsCache = serverComics;
+      } catch {}
+    }
+
+    // Merge: show all from server (with status) + any IndexedDB-only entries
+    const merged = [];
+    const seenServerIds = new Set();
+
+    // First: IndexedDB entries with server link
+    for (const p of pdfs) {
+      const sc = p.serverId ? serverComics.find(s => s.id === p.serverId) : null;
+      merged.push({
+        ...p,
+        serverEntry: sc || null,
+        fileExists: sc ? sc.exists : true, // no server = assume exists (IndexedDB-only)
+        source: 'indexeddb',
+      });
+      if (sc) seenServerIds.add(sc.id);
+    }
+
+    // Then: server-only entries (not yet in IndexedDB)
+    for (const sc of serverComics) {
+      if (!seenServerIds.has(sc.id)) {
+        merged.push({
+          id: null,
+          name: sc.name,
+          type: sc.type,
+          pageCount: sc.pageCount || '?',
+          serverId: sc.id,
+          serverEntry: sc,
+          fileExists: sc.exists,
+          source: 'server-only',
+        });
+      }
+    }
+
+    if (merged.length === 0) {
       list.innerHTML = '';
       empty.style.display = 'block';
       return;
     }
 
+    // Sort by sortOrder
+    merged.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999));
+
     empty.style.display = 'none';
-    list.innerHTML = pdfs.map(p => `
-      <div class="pdf-item">
+    list.innerHTML = '';
+
+    // Store merged for reorder access
+    list._mergedItems = merged;
+
+    merged.forEach((p, index) => {
+      const isMissing = !p.fileExists;
+      const isServerOnly = p.source === 'server-only';
+      const statusClass = isMissing ? 'pdf-item-missing' : (isServerOnly ? 'pdf-item-server-only' : '');
+
+      let statusBadge = '';
+      if (isMissing) {
+        statusBadge = '<span class="pdf-status-badge missing">Datei nicht gefunden</span>';
+      } else if (isServerOnly) {
+        statusBadge = '<span class="pdf-status-badge server-only">Nur auf Server</span>';
+      } else if (isLocal && p.serverId) {
+        statusBadge = '<span class="pdf-status-badge synced">Gespeichert</span>';
+      }
+
+      let actions = '';
+      if (isMissing) {
+        actions = `
+          <button class="btn btn-accent btn-sm" onclick="reassignFile(${p.serverId})">Neu zuweisen</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePdf(${p.id || 'null'}, ${p.serverId || 'null'})">Entfernen</button>
+        `;
+      } else if (isServerOnly) {
+        actions = `
+          <button class="btn btn-accent btn-sm" onclick="importFromServer(${p.serverId})">Importieren</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePdf(null, ${p.serverId})">Entfernen</button>
+        `;
+      } else {
+        actions = `
+          <button class="btn btn-sm" onclick="renamePdf(${p.id})">Umbenennen</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePdf(${p.id}, ${p.serverId || 'null'})">L&ouml;schen</button>
+        `;
+      }
+
+      const div = document.createElement('div');
+      div.className = `pdf-item ${statusClass}`;
+      div.dataset.index = index;
+      div.dataset.pdfId = p.id || '';
+      div.innerHTML = `
+        <div class="pdf-item-drag-handle" title="Ziehen zum Sortieren">&#9776;</div>
         <div class="pdf-item-icon">${(p.type || 'pdf').toUpperCase()}</div>
         <div class="pdf-item-info">
-          <div class="pdf-item-name" id="pdf-name-${p.id}">${p.name}</div>
-          <div class="pdf-item-meta">${p.pageCount || '?'} Seiten</div>
+          <div class="pdf-item-name" id="pdf-name-${p.id || 'srv-' + p.serverId}">${p.name}</div>
+          <div class="pdf-item-meta">${p.pageCount || '?'} Seiten ${statusBadge}</div>
         </div>
-        <div class="pdf-item-actions">
-          <button class="btn btn-sm" onclick="renamePdf(${p.id})">Umbenennen</button>
-          <button class="btn btn-danger btn-sm" onclick="deletePdf(${p.id})">Löschen</button>
-        </div>
-      </div>
-    `).join('');
+        <div class="pdf-item-actions">${actions}</div>
+      `;
+
+      list.appendChild(div);
+    });
+
+    // ── Reorder via drag handle (mousedown-based) ──
+    setupReorderDrag(list);
+  }
+
+  // ── Reorder: mouse-based drag (works reliably, no HTML5 drag API) ──
+  function setupReorderDrag(listEl) {
+    let dragEl = null;
+    let placeholder = null;
+    let startY = 0;
+    let offsetY = 0;
+
+    listEl.querySelectorAll('.pdf-item-drag-handle').forEach(handle => {
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        dragEl = handle.closest('.pdf-item');
+        if (!dragEl) return;
+
+        const rect = dragEl.getBoundingClientRect();
+        offsetY = e.clientY - rect.top;
+        startY = e.clientY;
+
+        // Create placeholder
+        placeholder = document.createElement('div');
+        placeholder.className = 'pdf-item-placeholder';
+        placeholder.style.height = rect.height + 'px';
+        dragEl.parentNode.insertBefore(placeholder, dragEl);
+
+        // Make drag element floating
+        dragEl.classList.add('reorder-dragging');
+        dragEl.style.width = rect.width + 'px';
+        dragEl.style.top = rect.top + 'px';
+        dragEl.style.left = rect.left + 'px';
+        document.body.appendChild(dragEl);
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    });
+
+    function onMouseMove(e) {
+      if (!dragEl) return;
+      dragEl.style.top = (e.clientY - offsetY) + 'px';
+
+      // Find the item we're hovering over
+      const items = [...listEl.querySelectorAll('.pdf-item:not(.reorder-dragging)')];
+      let insertBefore = null;
+
+      for (const item of items) {
+        const rect = item.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          insertBefore = item;
+          break;
+        }
+      }
+
+      // Move placeholder
+      if (insertBefore) {
+        listEl.insertBefore(placeholder, insertBefore);
+      } else {
+        listEl.appendChild(placeholder);
+      }
+    }
+
+    async function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      if (!dragEl || !placeholder) return;
+
+      // Insert drag element at placeholder position
+      dragEl.classList.remove('reorder-dragging');
+      dragEl.style.width = '';
+      dragEl.style.top = '';
+      dragEl.style.left = '';
+      listEl.insertBefore(dragEl, placeholder);
+      placeholder.remove();
+
+      // Read new order from DOM and save
+      const items = [...listEl.querySelectorAll('.pdf-item')];
+      const merged = listEl._mergedItems;
+      if (!merged) return;
+
+      let changed = false;
+      for (let i = 0; i < items.length; i++) {
+        const pdfId = Number(items[i].dataset.pdfId);
+        if (!pdfId) continue;
+        const record = await dbGet('pdfs', pdfId);
+        if (record && record.sortOrder !== i) {
+          record.sortOrder = i;
+          await dbUpdate('pdfs', record);
+          changed = true;
+        }
+      }
+
+      dragEl = null;
+      placeholder = null;
+
+      if (changed) {
+        showToast('Reihenfolge aktualisiert');
+        loadPdfList();
+      }
+    }
   }
 
   window.renamePdf = async (id) => {
@@ -222,16 +494,144 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!newName || !newName.trim() || newName.trim() === record.name) return;
     record.name = newName.trim();
     await dbUpdate('pdfs', record);
+
+    // Also update on server
+    if (record.serverId) {
+      try { await ServerSync.updateComic(record.serverId, { name: record.name }); } catch {}
+    }
     showToast(`Umbenannt zu "${record.name}"`);
     loadPdfList();
   };
 
-  window.deletePdf = async (id) => {
+  window.deletePdf = async (id, serverId) => {
     if (!confirm('Wirklich löschen? Alle Zuweisungen gehen verloren.')) return;
-    await dbDelete('pdfs', id);
-    await dbClearByIndex('mappings', 'pdfId', id);
+    if (id) {
+      await dbDelete('pdfs', id);
+      await dbClearByIndex('mappings', 'pdfId', id);
+    }
+    if (serverId) {
+      try { await ServerSync.deleteComic(serverId); } catch {}
+    }
     showToast('Gelöscht');
     loadPdfList();
+  };
+
+  window.reassignFile = async (serverId) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.cbr,.rar';
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+
+      showToast('Datei wird neu zugewiesen...');
+      try {
+        await ServerSync.reassignComic(serverId, file);
+
+        const serverComics = await ServerSync.getComics();
+        const sc = serverComics.find(s => s.id === serverId);
+        if (!sc) { showToast('Server-Eintrag nicht gefunden', 'error'); return; }
+
+        const arrayBuffer = await ServerSync.fetchComicFile(serverId);
+        if (!arrayBuffer) { showToast('Datei konnte nicht geladen werden', 'error'); return; }
+
+        // Find existing IndexedDB entry to preserve its ID (and thus mappings)
+        const allPdfs = await dbGetAll('pdfs');
+        const existing = allPdfs.find(p => p.serverId === serverId);
+
+        if (existing) {
+          // UPDATE existing record in-place (keeps same ID → mappings stay intact)
+          const ext = file.name.split('.').pop().toLowerCase();
+          const isCBR = ext === 'cbr' || ext === 'rar';
+
+          if (isCBR) {
+            const wasmResp = await fetch('lib/unrar.wasm');
+            const wasmBinary = await wasmResp.arrayBuffer();
+            const extractor = await createExtractorFromData({ wasmBinary, data: arrayBuffer });
+            const { files } = extractor.extract();
+            const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+            const images = [];
+            for (const entry of files) {
+              const fExt = entry.fileHeader.name.split('.').pop().toLowerCase();
+              if (imageExts.includes(fExt) && entry.extraction) {
+                images.push({ name: entry.fileHeader.name, data: entry.extraction });
+              }
+            }
+            images.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+            function getMime(n) {
+              const e = n.split('.').pop().toLowerCase();
+              return { jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', gif:'image/gif', bmp:'image/bmp', webp:'image/webp' }[e] || 'image/jpeg';
+            }
+            existing.type = 'cbr';
+            existing.data = null;
+            existing.pages = images.map(img => ({
+              data: img.data.buffer.slice(img.data.byteOffset, img.data.byteOffset + img.data.byteLength),
+              type: getMime(img.name),
+            }));
+            existing.pageCount = existing.pages.length;
+            try {
+              const blob = new Blob([existing.pages[0].data], { type: existing.pages[0].type });
+              existing.cover = await blobToDataURL(blob, 300);
+            } catch { existing.cover = null; }
+          } else {
+            const buf = arrayBuffer.slice(0);
+            existing.type = 'pdf';
+            existing.data = buf;
+            existing.pages = undefined;
+            try {
+              const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+              existing.pageCount = pdf.numPages;
+              const page = await pdf.getPage(1);
+              const vp = page.getViewport({ scale: 0.5 });
+              const cvs = document.createElement('canvas');
+              cvs.width = vp.width; cvs.height = vp.height;
+              await page.render({ canvasContext: cvs.getContext('2d'), viewport: vp }).promise;
+              existing.cover = cvs.toDataURL('image/jpeg', 0.7);
+            } catch { existing.pageCount = 0; existing.cover = null; }
+          }
+
+          await dbUpdate('pdfs', existing);
+          try { await ServerSync.updateComic(serverId, { pageCount: existing.pageCount, cover: existing.cover }); } catch {}
+        } else {
+          // No existing entry → create new
+          if (sc.type === 'cbr') {
+            await ServerSync.importCBRFromBuffer(sc.name, arrayBuffer, serverId);
+          } else {
+            await ServerSync.importPDFFromBuffer(sc.name, arrayBuffer, serverId);
+          }
+        }
+
+        showToast('Datei erfolgreich neu zugewiesen');
+        loadPdfList();
+      } catch (e) {
+        console.error('Reassign failed:', e);
+        showToast('Fehler: ' + e.message, 'error');
+      }
+    };
+    input.click();
+  };
+
+  window.importFromServer = async (serverId) => {
+    showToast('Wird importiert...');
+    try {
+      const serverComics = await ServerSync.getComics();
+      const sc = serverComics.find(s => s.id === serverId);
+      if (!sc) { showToast('Nicht gefunden', 'error'); return; }
+
+      const arrayBuffer = await ServerSync.fetchComicFile(serverId);
+      if (!arrayBuffer) { showToast('Datei konnte nicht geladen werden', 'error'); return; }
+
+      if (sc.type === 'cbr') {
+        await ServerSync.importCBRFromBuffer(sc.name, arrayBuffer, serverId);
+      } else {
+        await ServerSync.importPDFFromBuffer(sc.name, arrayBuffer, serverId);
+      }
+
+      showToast(`"${sc.name}" importiert`);
+      loadPdfList();
+    } catch (e) {
+      showToast('Import-Fehler: ' + e.message, 'error');
+    }
   };
 
   // ══════════════════════════════
@@ -643,6 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentMappings = await dbGetByIndex('mappings', 'pdfId', currentAssignPdfId);
     renderPageGrid(currentPdfRecord.pageCount);
     showToast(`Seite ${previewPage}: Musik zugewiesen`);
+    ServerSync.saveMappingsToServer();
   });
 
   document.getElementById('previewAssignBtn').addEventListener('click', async () => {
@@ -656,6 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentMappings = await dbGetByIndex('mappings', 'pdfId', currentAssignPdfId);
     renderPageGrid(currentPdfRecord.pageCount);
     showToast(`Seite ${previewPage}: Musik zugewiesen`);
+    ServerSync.saveMappingsToServer();
   });
 
   document.getElementById('previewRemoveBtn').addEventListener('click', async () => {
@@ -666,6 +1068,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderPageGrid(currentPdfRecord.pageCount);
       document.getElementById('previewMusicSelect').value = '';
       showToast(`Seite ${previewPage}: Zuweisung entfernt`);
+      ServerSync.saveMappingsToServer();
     }
   });
 
@@ -736,6 +1139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAssignBar();
     renderPageGrid(pdf.pageCount);
     showToast('Musik zugewiesen');
+    ServerSync.saveMappingsToServer();
   });
 
   document.getElementById('assignRemoveBtn').addEventListener('click', async () => {
@@ -750,6 +1154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAssignBar();
     renderPageGrid(pdf.pageCount);
     showToast('Zuweisungen entfernt');
+    ServerSync.saveMappingsToServer();
   });
 
   document.getElementById('assignCancelBtn').addEventListener('click', () => {

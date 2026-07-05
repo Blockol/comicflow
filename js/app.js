@@ -19,8 +19,13 @@ async function loadLibrary() {
   const empty = document.getElementById('emptyState');
   if (!grid) return;
 
-  const pdfs = await dbGetAll('pdfs');
+  // Sync from server if local (re-imports files + mappings lost from IndexedDB)
+  try {
+    await ServerSync.syncToIndexedDB();
+    await ServerSync.restoreMappingsFromServer();
+  } catch(e) { console.log('Server sync skipped:', e.message); }
 
+  const pdfs = (await dbGetAll('pdfs')).sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999));
   if (pdfs.length === 0) {
     empty.style.display = 'block';
     grid.style.display = 'none';

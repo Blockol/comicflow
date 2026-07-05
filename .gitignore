@@ -16,6 +16,9 @@ lib/wasm-gen/
 # Python scripts
 *.py
 
+# Local server data (comics stored on disk)
+data/
+
 # Claude settings
 .claude/
 

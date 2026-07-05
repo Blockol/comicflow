@@ -90,7 +90,15 @@ async function init() {
     return;
   }
 
-  const record = await dbGet('pdfs', state.pdfId);
+  let record = await dbGet('pdfs', state.pdfId);
+
+  // If not in IndexedDB, try syncing from server
+  if (!record && await ServerSync.isLocalServer()) {
+    showToast('Lade vom Server...');
+    await ServerSync.syncToIndexedDB();
+    record = await dbGet('pdfs', state.pdfId);
+  }
+
   if (!record) {
     showToast('Datei nicht gefunden', 'error');
     return;
