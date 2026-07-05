@@ -354,13 +354,25 @@ function setupControls() {
   const nav = document.querySelector('.nav');
   const controls = document.querySelector('.reader-controls');
 
+  // Add transition styles for smooth animation
+  nav.style.transition = 'transform 0.35s ease, opacity 0.35s ease';
+  controls.style.transition = 'transform 0.35s ease, opacity 0.35s ease';
+
   function enterImmersive() {
     if (immersive) return;
     immersive = true;
     currentZoom = 1; panX = 0; panY = 0;
-    canvas.style.transform = '';
-    nav.style.display = 'none';
-    controls.style.display = 'none';
+
+    // Slide nav up, controls down
+    nav.style.transform = 'translateY(-100%)';
+    nav.style.opacity = '0';
+    controls.style.transform = 'translateY(100%)';
+    controls.style.opacity = '0';
+
+    // Slight zoom-in on canvas
+    canvas.style.transform = 'scale(1.02)';
+    setTimeout(() => { canvas.style.transform = ''; }, 350);
+
     container.style.paddingTop = '0';
     document.body.style.overflow = 'hidden';
     wrapper.style.height = '100vh';
@@ -371,9 +383,14 @@ function setupControls() {
     if (!immersive) return;
     immersive = false;
     currentZoom = 1; panX = 0; panY = 0;
+
+    // Slide nav back down, controls back up
+    nav.style.transform = '';
+    nav.style.opacity = '';
+    controls.style.transform = '';
+    controls.style.opacity = '';
+
     canvas.style.transform = '';
-    nav.style.display = '';
-    controls.style.display = '';
     container.style.paddingTop = '';
     document.body.style.overflow = '';
     wrapper.style.height = '';
