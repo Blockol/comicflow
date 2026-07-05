@@ -35,33 +35,41 @@ const GitHubSync = (() => {
     };
   }
 
-  // Read sync data from GitHub
+  // Read sync data from GitHub (API with token, or fallback to Pages URL)
   async function loadFromGitHub() {
+    // Try API first (needed for SHA to enable writes)
+    if (getToken()) {
+      try {
+        const res = await fetch(
+          `${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${SYNC_FILE}`,
+          { headers: headers() }
+        );
+
+        if (res.status === 404) {
+          _fileSha = null;
+          return null;
+        }
+
+        if (res.ok) {
+          const data = await res.json();
+          _fileSha = data.sha;
+          const content = atob(data.content.replace(/\n/g, ''));
+          return JSON.parse(content);
+        }
+      } catch (e) {
+        console.warn('[GITHUB] API load failed, trying Pages fallback:', e.message);
+      }
+    }
+
+    // Fallback: read directly from GitHub Pages (no token needed)
     try {
-      const res = await fetch(
-        `${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${SYNC_FILE}`,
-        { headers: headers() }
-      );
-
-      if (res.status === 404) {
-        _fileSha = null;
-        return null; // file doesn't exist yet
-      }
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'GitHub API error');
-      }
-
-      const data = await res.json();
-      _fileSha = data.sha;
-
-      // Content is base64 encoded
-      const content = atob(data.content.replace(/\n/g, ''));
-      return JSON.parse(content);
+      const pagesUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${SYNC_FILE}?t=${Date.now()}`;
+      const res = await fetch(pagesUrl);
+      if (!res.ok) return null;
+      return await res.json();
     } catch (e) {
       console.error('[GITHUB] Load failed:', e);
-      throw e;
+      return null;
     }
   }
 

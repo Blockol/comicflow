@@ -99,10 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Re-sync mappings from GitHub for this newly uploaded file
     try {
-      if (GitHubSync.isConfigured()) {
-        const remote = await GitHubSync.loadFromGitHub();
-        if (remote) await GitHubSync.applySyncData(remote);
-      }
+      const remote = await GitHubSync.loadFromGitHub();
+      if (remote) await GitHubSync.applySyncData(remote);
     } catch(e) { console.log('Post-upload sync skipped:', e.message); }
   }
 
