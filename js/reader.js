@@ -133,40 +133,22 @@ async function init() {
 // Page turn animation state
 let turnAnimTimer = null;
 let lastTurnTime = 0;
-const PAGE_TURN_ENABLED = () => localStorage.getItem('comicflow_page_turn_anim') === '1';
+function getPageTurnStyle() {
+  // Migrate old setting
+  if (localStorage.getItem('comicflow_page_turn_anim') === '1') {
+    localStorage.setItem('comicflow_page_turn_style', 'comic');
+    localStorage.removeItem('comicflow_page_turn_anim');
+  }
+  return localStorage.getItem('comicflow_page_turn_style') || 'none';
+}
 
 async function renderPage(num, direction) {
-  const doAnim = PAGE_TURN_ENABLED() && direction;
+  const style = direction ? getPageTurnStyle() : 'none';
 
-  if (doAnim) {
-    // Speed up animation if flipping fast (< 600ms between flips)
-    const now = Date.now();
-    const timeSinceLast = now - lastTurnTime;
-    lastTurnTime = now;
-    const speed = timeSinceLast < 600 ? '0.2s' : '0.4s';
-    const halfSpeed = timeSinceLast < 600 ? 100 : 200;
-
-    // Cancel any running animation
-    if (turnAnimTimer) { clearTimeout(turnAnimTimer); turnAnimTimer = null; }
-    canvas.classList.remove('page-turn-next', 'page-turn-prev');
-
-    // Force reflow to restart animation
-    void canvas.offsetWidth;
-
-    canvas.style.setProperty('--turn-speed', speed);
-    canvas.classList.add(direction === 'next' ? 'page-turn-next' : 'page-turn-prev');
-
-    // Render new page at the midpoint of the animation (when canvas is "edge-on")
-    turnAnimTimer = setTimeout(async () => {
-      if (state.fileType === 'cbr') await renderCBRPage(num);
-      else await renderPDFPage(num);
-    }, halfSpeed);
-
-    // Remove animation class when done
-    setTimeout(() => {
-      canvas.classList.remove('page-turn-next', 'page-turn-prev');
-      turnAnimTimer = null;
-    }, halfSpeed * 2 + 50);
+  if (style === 'comic' && direction) {
+    await animateComicFlip(num, direction);
+  } else if (style === 'book' && direction) {
+    await animateBookTurn(num, direction);
   } else {
     if (state.fileType === 'cbr') await renderCBRPage(num);
     else await renderPDFPage(num);
@@ -177,6 +159,79 @@ async function renderPage(num, direction) {
   document.getElementById('nextBtn').disabled = num >= state.totalPages;
   localStorage.setItem(`comicflow_page_${state.pdfId}`, num);
   scheduleMusic(num);
+}
+
+async function animateComicFlip(num, direction) {
+  const now = Date.now();
+  const timeSinceLast = now - lastTurnTime;
+  lastTurnTime = now;
+  const speed = timeSinceLast < 600 ? '0.2s' : '0.4s';
+  const halfSpeed = timeSinceLast < 600 ? 100 : 200;
+
+  if (turnAnimTimer) { clearTimeout(turnAnimTimer); turnAnimTimer = null; }
+  canvas.classList.remove('page-turn-next', 'page-turn-prev');
+  void canvas.offsetWidth;
+
+  canvas.style.setProperty('--turn-speed', speed);
+  canvas.classList.add(direction === 'next' ? 'page-turn-next' : 'page-turn-prev');
+
+  turnAnimTimer = setTimeout(async () => {
+    if (state.fileType === 'cbr') await renderCBRPage(num);
+    else await renderPDFPage(num);
+  }, halfSpeed);
+
+  setTimeout(() => {
+    canvas.classList.remove('page-turn-next', 'page-turn-prev');
+    turnAnimTimer = null;
+  }, halfSpeed * 2 + 50);
+}
+
+async function animateBookTurn(num, direction) {
+  const now = Date.now();
+  const timeSinceLast = now - lastTurnTime;
+  lastTurnTime = now;
+  const fast = timeSinceLast < 600;
+  const speed = fast ? '0.25s' : '0.5s';
+  const duration = fast ? 250 : 500;
+
+  // Remove any existing overlay
+  const existing = document.querySelector('.page-turn-overlay');
+  if (existing) existing.remove();
+
+  // Capture current page as image
+  const snapshot = canvas.toDataURL('image/jpeg', 0.85);
+
+  // Render new page underneath
+  if (state.fileType === 'cbr') await renderCBRPage(num);
+  else await renderPDFPage(num);
+
+  // Create overlay with old page snapshot
+  const wrapper = document.querySelector('.reader-canvas-wrapper');
+  const overlay = document.createElement('div');
+  overlay.className = 'page-turn-overlay';
+  overlay.style.setProperty('--turn-speed', speed);
+  overlay.style.width = canvas.style.width || (canvas.offsetWidth + 'px');
+  overlay.style.height = canvas.style.height || (canvas.offsetHeight + 'px');
+  overlay.style.position = 'absolute';
+
+  // Position overlay on top of canvas
+  const rect = canvas.getBoundingClientRect();
+  const wrapperRect = wrapper.getBoundingClientRect();
+  overlay.style.left = (rect.left - wrapperRect.left) + 'px';
+  overlay.style.top = (rect.top - wrapperRect.top) + 'px';
+
+  const img = document.createElement('img');
+  img.src = snapshot;
+  const shadow = document.createElement('div');
+  shadow.className = 'page-shadow';
+
+  overlay.appendChild(img);
+  overlay.appendChild(shadow);
+  overlay.classList.add(direction === 'next' ? 'turn-next' : 'turn-prev');
+  wrapper.appendChild(overlay);
+
+  // Remove overlay after animation
+  setTimeout(() => overlay.remove(), duration + 50);
 }
 
 async function renderPDFPage(num) {

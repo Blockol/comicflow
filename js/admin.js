@@ -1370,12 +1370,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ── Settings ──
-  const pageTurnCheckbox = document.getElementById('pageTurnAnim');
-  if (pageTurnCheckbox) {
-    pageTurnCheckbox.checked = localStorage.getItem('comicflow_page_turn_anim') === '1';
-    pageTurnCheckbox.addEventListener('change', () => {
-      localStorage.setItem('comicflow_page_turn_anim', pageTurnCheckbox.checked ? '1' : '0');
-      showToast(pageTurnCheckbox.checked ? 'Animation aktiviert' : 'Animation deaktiviert');
+  const pageTurnSelect = document.getElementById('pageTurnStyle');
+  if (pageTurnSelect) {
+    pageTurnSelect.value = localStorage.getItem('comicflow_page_turn_style') || 'none';
+    pageTurnSelect.addEventListener('change', () => {
+      localStorage.setItem('comicflow_page_turn_style', pageTurnSelect.value);
+      // Migrate old setting
+      localStorage.removeItem('comicflow_page_turn_anim');
+      showToast('Animation: ' + (pageTurnSelect.value === 'none' ? 'Aus' : pageTurnSelect.selectedOptions[0].text));
     });
   }
 
