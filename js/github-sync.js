@@ -61,10 +61,10 @@ const GitHubSync = (() => {
       }
     }
 
-    // Fallback: read directly from GitHub Pages (no token needed)
+    // Fallback: read from raw.githubusercontent.com (no token needed, always current)
     try {
-      const pagesUrl = `https://${REPO_OWNER}.github.io/${REPO_NAME}/${SYNC_FILE}?t=${Date.now()}`;
-      const res = await fetch(pagesUrl);
+      const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/master/${SYNC_FILE}?t=${Date.now()}`;
+      const res = await fetch(rawUrl);
       if (!res.ok) return null;
       return await res.json();
     } catch (e) {
