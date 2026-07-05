@@ -30,20 +30,26 @@ async function loadLibrary() {
   const empty = document.getElementById('emptyState');
   if (!grid) return;
 
+  console.log('[APP] loadLibrary start');
+
   // Wait for auto-import to finish first (so music exists in DB for mapping sync)
   await waitForAutoImport();
+  console.log('[APP] auto-import done');
 
   // Sync from server if local (re-imports files + mappings lost from IndexedDB)
   try {
     await ServerSync.syncToIndexedDB();
     await ServerSync.restoreMappingsFromServer();
-  } catch(e) { console.log('Server sync skipped:', e.message); }
+  } catch(e) { console.log('[APP] Server sync skipped:', e.message); }
 
-  // Sync from GitHub (mappings, sort order, descriptions) - works without token via Pages fallback
+  // Sync from GitHub (mappings, sort order, descriptions)
   try {
+    console.log('[APP] GitHub sync starting...');
     const remote = await GitHubSync.loadFromGitHub();
+    console.log('[APP] GitHub data loaded:', remote ? remote.mappings.length + ' mappings' : 'null');
     if (remote) await GitHubSync.applySyncData(remote);
-  } catch(e) { console.log('GitHub sync skipped:', e.message); }
+    console.log('[APP] GitHub sync done');
+  } catch(e) { console.log('[APP] GitHub sync error:', e.message); }
 
   const pdfs = (await dbGetAll('pdfs')).sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999));
 
