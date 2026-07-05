@@ -887,10 +887,9 @@ select.form-input {
 }
 
 .reader-canvas-wrapper canvas {
-  max-width: 100%;
-  height: auto;
   border-radius: 4px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  image-rendering: auto;
 }
 
 .reader-controls {

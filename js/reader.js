@@ -337,29 +337,53 @@ function setupControls() {
     masterGain.gain.setValueAtTime(state.volume, audioCtx.currentTime);
   };
 
-  // ── Pinch-to-Zoom ──
-  let currentZoom = 1;
+  // ── Immersive Mode + Pinch-to-Zoom ──
+  // Mode 1 (normal): nav + controls visible, swipe = page change
+  // Mode 2 (immersive): pinch-out → UI hidden, swipe = page change, can zoom further
+  // Pinch-in below 1x → back to mode 1
+
+  let immersive = false;
+  let currentZoom = 1;     // zoom within immersive mode (1 = fit screen)
   let initialPinchDist = 0;
   let pinchStartZoom = 1;
   let panX = 0, panY = 0, panStartX = 0, panStartY = 0;
   let isPanning = false;
+  let wasImmersiveBeforePinch = false;
   const wrapper = document.querySelector('.reader-canvas-wrapper');
   const container = document.getElementById('readerContainer');
   const nav = document.querySelector('.nav');
   const controls = document.querySelector('.reader-controls');
 
-  function setZoom(z) {
-    currentZoom = Math.max(1, Math.min(z, 5));
-    if (currentZoom <= 1) { panX = 0; panY = 0; }
-    canvas.style.transform = `scale(${currentZoom}) translate(${panX}px, ${panY}px)`;
-    canvas.style.transformOrigin = 'center center';
+  function enterImmersive() {
+    if (immersive) return;
+    immersive = true;
+    nav.style.display = 'none';
+    controls.style.display = 'none';
+    container.style.paddingTop = '0';
+    document.body.style.overflow = 'hidden';
+    wrapper.style.height = '100vh';
+    wrapper.style.alignItems = 'center';
+  }
 
-    // Hide/show UI when zoomed
-    const zoomed = currentZoom > 1.1;
-    nav.style.display = zoomed ? 'none' : '';
-    controls.style.display = zoomed ? 'none' : '';
-    container.style.paddingTop = zoomed ? '0' : '';
-    document.body.style.overflow = zoomed ? 'hidden' : '';
+  function exitImmersive() {
+    if (!immersive) return;
+    immersive = false;
+    currentZoom = 1;
+    panX = 0; panY = 0;
+    canvas.style.transform = '';
+    nav.style.display = '';
+    controls.style.display = '';
+    container.style.paddingTop = '';
+    document.body.style.overflow = '';
+    wrapper.style.height = '';
+    wrapper.style.alignItems = '';
+  }
+
+  function applyTransform() {
+    canvas.style.transform = currentZoom > 1.01
+      ? `scale(${currentZoom}) translate(${panX}px, ${panY}px)`
+      : '';
+    canvas.style.transformOrigin = 'center center';
   }
 
   wrapper.addEventListener('touchstart', e => {
@@ -370,7 +394,8 @@ function setupControls() {
         e.touches[0].clientY - e.touches[1].clientY
       );
       pinchStartZoom = currentZoom;
-    } else if (e.touches.length === 1 && currentZoom > 1.1) {
+      wasImmersiveBeforePinch = immersive;
+    } else if (e.touches.length === 1 && immersive && currentZoom > 1.05) {
       isPanning = true;
       panStartX = e.touches[0].clientX - panX * currentZoom;
       panStartY = e.touches[0].clientY - panY * currentZoom;
@@ -378,59 +403,114 @@ function setupControls() {
   }, { passive: false });
 
   wrapper.addEventListener('touchmove', e => {
-    if (e.touches.length === 2) {
+    if (e.touches.length === 2 && initialPinchDist > 0) {
       e.preventDefault();
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
-      setZoom(pinchStartZoom * (dist / initialPinchDist));
-    } else if (e.touches.length === 1 && isPanning && currentZoom > 1.1) {
+      const ratio = dist / initialPinchDist;
+
+      if (!immersive) {
+        // Mode 1: pinch-out enters immersive
+        if (ratio > 1.15) {
+          enterImmersive();
+          currentZoom = 1;
+          initialPinchDist = dist;
+          pinchStartZoom = 1;
+        }
+      } else {
+        // Mode 2: zoom within immersive
+        currentZoom = Math.max(0.5, Math.min(pinchStartZoom * ratio, 5));
+        if (currentZoom < 1) { panX = 0; panY = 0; }
+        applyTransform();
+      }
+    } else if (e.touches.length === 1 && isPanning && currentZoom > 1.05) {
       e.preventDefault();
       panX = (e.touches[0].clientX - panStartX) / currentZoom;
       panY = (e.touches[0].clientY - panStartY) / currentZoom;
-      canvas.style.transform = `scale(${currentZoom}) translate(${panX}px, ${panY}px)`;
+      applyTransform();
     }
   }, { passive: false });
 
   wrapper.addEventListener('touchend', e => {
-    if (e.touches.length < 2) initialPinchDist = 0;
-    if (e.touches.length === 0) isPanning = false;
-    // Reset zoom on double-tap
-    if (currentZoom <= 1) {
-      panX = 0; panY = 0;
+    if (e.touches.length < 2) {
+      // Pinch ended: check if we should exit immersive
+      if (immersive && currentZoom < 0.9) {
+        exitImmersive();
+      } else if (immersive && currentZoom < 1) {
+        currentZoom = 1;
+        panX = 0; panY = 0;
+        applyTransform();
+      }
+      initialPinchDist = 0;
     }
+    if (e.touches.length === 0) isPanning = false;
   });
 
-  // Touch/swipe for page navigation (only when not zoomed)
+  // Touch/swipe for page navigation (works in both modes when not zoomed)
   let touchStartX = 0;
-  canvas.addEventListener('touchstart', e => {
-    if (currentZoom <= 1.1 && e.touches.length === 1) {
+  let touchStartY = 0;
+  let touchMoved = false;
+
+  wrapper.addEventListener('touchstart', e => {
+    if (e.touches.length === 1 && (!immersive || currentZoom <= 1.05)) {
       touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchMoved = false;
     }
   }, { passive: true });
 
-  canvas.addEventListener('touchend', e => {
-    if (currentZoom <= 1.1) {
-      const diff = e.changedTouches[0].clientX - touchStartX;
-      if (Math.abs(diff) > 50) {
-        if (diff > 0) prevBtn.click();
-        else nextBtn.click();
+  wrapper.addEventListener('touchmove', e => {
+    if (e.touches.length === 1) touchMoved = true;
+  }, { passive: true });
+
+  wrapper.addEventListener('touchend', e => {
+    if (e.touches.length === 0 && touchMoved && (!immersive || currentZoom <= 1.05)) {
+      const diffX = e.changedTouches[0].clientX - touchStartX;
+      const diffY = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY)) {
+        if (diffX > 0) { goPrev(); } else { goNext(); }
       }
     }
   }, { passive: true });
 
-  // Reset zoom on page change
-  const origRenderPage = window.renderPage;
-  const prevOnclick = prevBtn.onclick;
-  const nextOnclick = nextBtn.onclick;
-  prevBtn.onclick = () => { setZoom(1); prevOnclick(); };
-  nextBtn.onclick = () => { setZoom(1); nextOnclick(); };
+  function goPrev() {
+    if (state.currentPage > 1) {
+      if (immersive) { currentZoom = 1; panX = 0; panY = 0; applyTransform(); }
+      state.currentPage--;
+      renderPage(state.currentPage);
+    }
+  }
+
+  function goNext() {
+    if (state.currentPage < state.totalPages) {
+      if (immersive) { currentZoom = 1; panX = 0; panY = 0; applyTransform(); }
+      state.currentPage++;
+      renderPage(state.currentPage);
+    }
+  }
 
   // Click on canvas to resume AudioContext (autoplay policy)
   canvas.addEventListener('click', () => {
     if (audioCtx.state === 'suspended') audioCtx.resume();
   }, { once: true });
+
+  // ── Pause music when app goes to background ──
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (activeTrack) {
+        activeTrack.gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      }
+      audioCtx.suspend();
+    } else {
+      audioCtx.resume().then(() => {
+        if (activeTrack) {
+          activeTrack.gain.gain.setValueAtTime(1, audioCtx.currentTime);
+        }
+      });
+    }
+  });
 
   window.addEventListener('resize', () => renderPage(state.currentPage));
 }
