@@ -1,16 +1,17 @@
-const CACHE_NAME = 'comicflow-v6';
+const CACHE_NAME = 'comicflow-v7';
 const ASSETS = [
-  '/index.html',
-  '/reader.html',
-  '/admin.html',
-  '/css/style.css',
-  '/js/db.js',
-  '/js/app.js',
-  '/js/reader.js',
-  '/js/admin.js',
-  '/lib/unrar.js',
-  '/lib/unrar-bundle.js',
-  '/manifest.json'
+  './',
+  './index.html',
+  './reader.html',
+  './admin.html',
+  './css/style.css',
+  './js/db.js',
+  './js/app.js',
+  './js/reader.js',
+  './js/admin.js',
+  './lib/unrar.js',
+  './lib/unrar-bundle.js',
+  './manifest.json'
 ];
 
 self.addEventListener('install', e => {
