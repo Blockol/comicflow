@@ -182,23 +182,18 @@ const GitHubSync = (() => {
       }
     }
 
-    // Apply mappings (merge: add missing ones)
+    // Apply mappings: add only where no local mapping exists for that pdf+page
     const localMappings = await dbGetAll('mappings');
     let mappingsAdded = 0;
     for (const sm of syncData.mappings || []) {
       const pdf = pdfs.find(p => p.name === sm.pdfName);
       const mus = music.find(m => m.name === sm.musicName);
       if (pdf && mus) {
-        // Check if this mapping already exists locally
-        const exists = localMappings.find(lm =>
-          lm.pdfId === pdf.id && lm.page === sm.page && lm.musicId === mus.id
+        // Only add if no local mapping exists for this pdf+page
+        const existing = localMappings.find(lm =>
+          lm.pdfId === pdf.id && lm.page === sm.page
         );
-        if (!exists) {
-          // Remove any existing mapping for same pdf+page before adding
-          const conflicting = localMappings.find(lm =>
-            lm.pdfId === pdf.id && lm.page === sm.page
-          );
-          if (conflicting) await dbDelete('mappings', conflicting.id);
+        if (!existing) {
           await dbAdd('mappings', {
             pdfId: pdf.id,
             page: sm.page,
