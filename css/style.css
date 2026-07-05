@@ -1101,6 +1101,29 @@ select.form-input {
   margin-bottom: 0.5rem;
 }
 
+/* ── Missing file cards in library ── */
+.card-missing {
+  opacity: 0.7;
+  border: 1px solid rgba(192, 57, 43, 0.3);
+}
+
+.card-overlay-missing {
+  display: flex !important;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: rgba(0,0,0,0.7) !important;
+}
+
+.card-missing-label {
+  color: #e74c3c;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.card-meta-missing {
+  color: #e74c3c !important;
+}
+
 /* ── Drop Zone ── */
 .drop-zone {
   border: 2px dashed var(--border-light);

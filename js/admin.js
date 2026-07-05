@@ -176,7 +176,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error('PDF processing error:', e);
     }
-    await dbAdd('pdfs', { name, type: 'pdf', data: storageBuffer, pageCount, cover, serverId: serverId || null });
+    const dbId = await dbAdd('pdfs', { name, type: 'pdf', data: storageBuffer, pageCount, cover, serverId: serverId || null });
+
+    // Register in localStorage backup
+    FileRegistry.register({ dbId, name, type: 'pdf', pageCount, cover, sortOrder: 9999 });
 
     // Update server metadata
     if (serverId && (pageCount || cover)) {
@@ -238,10 +241,13 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('CBR cover generation failed', e);
       }
 
-      await dbAdd('pdfs', {
+      const dbId = await dbAdd('pdfs', {
         name, type: 'cbr', data: null,
         pages, pageCount: pages.length, cover, serverId: serverId || null
       });
+
+      // Register in localStorage backup
+      FileRegistry.register({ dbId, name, type: 'cbr', pageCount: pages.length, cover, sortOrder: 9999 });
 
       if (serverId && (pages.length || cover)) {
         try { await ServerSync.updateComic(serverId, { pageCount: pages.length, cover }); } catch {}
@@ -287,9 +293,13 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch {}
     }
 
-    // Merge: show all from server (with status) + any IndexedDB-only entries
+    // Sync registry from current DB (populates for existing users)
+    await FileRegistry.syncFromDB();
+
+    // Merge: IndexedDB + server + registry (missing files)
     const merged = [];
     const seenServerIds = new Set();
+    const seenDbIds = new Set();
 
     // First: IndexedDB entries with server link
     for (const p of pdfs) {
@@ -297,10 +307,11 @@ document.addEventListener('DOMContentLoaded', () => {
       merged.push({
         ...p,
         serverEntry: sc || null,
-        fileExists: sc ? sc.exists : true, // no server = assume exists (IndexedDB-only)
+        fileExists: sc ? sc.exists : true,
         source: 'indexeddb',
       });
       if (sc) seenServerIds.add(sc.id);
+      seenDbIds.add(p.id);
     }
 
     // Then: server-only entries (not yet in IndexedDB)
@@ -317,6 +328,25 @@ document.addEventListener('DOMContentLoaded', () => {
           source: 'server-only',
         });
       }
+    }
+
+    // Then: registry entries missing from IndexedDB (browser data cleared)
+    const missingFromRegistry = await FileRegistry.getMissing();
+    for (const m of missingFromRegistry) {
+      // Skip if already shown via server
+      const alreadyShown = merged.find(x => x.name === m.name && x.source !== 'indexeddb');
+      if (alreadyShown) continue;
+      merged.push({
+        id: null,
+        name: m.name,
+        type: m.type,
+        pageCount: m.pageCount || '?',
+        cover: m.cover || null,
+        sortOrder: m.sortOrder ?? 9999,
+        registryDbId: m.dbId,
+        fileExists: false,
+        source: 'registry-missing',
+      });
     }
 
     if (merged.length === 0) {
@@ -349,7 +379,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       let actions = '';
-      if (isMissing) {
+      if (p.source === 'registry-missing') {
+        actions = `
+          <button class="btn btn-accent btn-sm" onclick="reuploadFromRegistry(${p.registryDbId})">Neu hochladen</button>
+          <button class="btn btn-danger btn-sm" onclick="removeFromRegistry(${p.registryDbId})">Entfernen</button>
+        `;
+      } else if (isMissing) {
         actions = `
           <button class="btn btn-accent btn-sm" onclick="reassignFile(${p.serverId})">Neu zuweisen</button>
           <button class="btn btn-danger btn-sm" onclick="deletePdf(${p.id || 'null'}, ${p.serverId || 'null'})">Entfernen</button>
@@ -473,6 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (record && record.sortOrder !== i) {
           record.sortOrder = i;
           await dbUpdate('pdfs', record);
+          FileRegistry.update(pdfId, { sortOrder: i });
           changed = true;
         }
       }
@@ -487,6 +523,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  window.reuploadFromRegistry = async (registryDbId) => {
+    const registry = FileRegistry.getAll();
+    const entry = registry.find(e => e.dbId === registryDbId);
+    if (!entry) return;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.cbr,.rar';
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+
+      showToast(`"${entry.name}" wird neu hochgeladen...`);
+      try {
+        await uploadComicFile(file, entry.name);
+        // Remove old registry entry (new one was created by uploadComicFile)
+        FileRegistry.remove(registryDbId);
+        showToast(`"${entry.name}" wiederhergestellt`);
+        loadPdfList();
+      } catch (e) {
+        showToast('Fehler: ' + e.message, 'error');
+      }
+    };
+    input.click();
+  };
+
+  window.removeFromRegistry = (registryDbId) => {
+    if (!confirm('Eintrag aus der Liste entfernen?')) return;
+    FileRegistry.remove(registryDbId);
+    showToast('Entfernt');
+    loadPdfList();
+  };
+
   window.renamePdf = async (id) => {
     const record = await dbGet('pdfs', id);
     if (!record) return;
@@ -494,6 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!newName || !newName.trim() || newName.trim() === record.name) return;
     record.name = newName.trim();
     await dbUpdate('pdfs', record);
+    FileRegistry.update(id, { name: record.name });
 
     // Also update on server
     if (record.serverId) {
@@ -508,6 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (id) {
       await dbDelete('pdfs', id);
       await dbClearByIndex('mappings', 'pdfId', id);
+      FileRegistry.remove(id);
     }
     if (serverId) {
       try { await ServerSync.deleteComic(serverId); } catch {}

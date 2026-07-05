@@ -26,7 +26,12 @@ async function loadLibrary() {
   } catch(e) { console.log('Server sync skipped:', e.message); }
 
   const pdfs = (await dbGetAll('pdfs')).sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999));
-  if (pdfs.length === 0) {
+
+  // Check for missing files from registry
+  await FileRegistry.syncFromDB();
+  const missing = await FileRegistry.getMissing();
+
+  if (pdfs.length === 0 && missing.length === 0) {
     empty.style.display = 'block';
     grid.style.display = 'none';
     return;
@@ -58,6 +63,34 @@ async function loadLibrary() {
       <div class="card-body">
         <div class="card-title">${pdf.name}</div>
         <div class="card-meta">${pdf.pageCount || '?'} Seiten</div>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+
+  // Show missing files from registry
+  for (const m of missing.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999))) {
+    const card = document.createElement('div');
+    card.className = 'card fade-in card-missing';
+
+    let coverHtml;
+    if (m.cover) {
+      coverHtml = `<img src="${m.cover}" alt="${m.name}" style="opacity:0.4;filter:grayscale(1);">`;
+    } else {
+      coverHtml = `<div class="card-cover-placeholder">?</div>`;
+    }
+
+    card.innerHTML = `
+      <div class="card-cover">
+        ${coverHtml}
+        <div class="card-overlay card-overlay-missing">
+          <span class="card-missing-label">Datei fehlt</span>
+          <button class="card-overlay-btn" onclick="event.stopPropagation();window.location.href='admin.html'">Zur Verwaltung</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-title">${m.name}</div>
+        <div class="card-meta card-meta-missing">Nicht gefunden</div>
       </div>
     `;
     grid.appendChild(card);
