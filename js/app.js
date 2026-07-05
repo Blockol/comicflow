@@ -25,6 +25,14 @@ async function loadLibrary() {
     await ServerSync.restoreMappingsFromServer();
   } catch(e) { console.log('Server sync skipped:', e.message); }
 
+  // Sync from GitHub (mappings, sort order)
+  try {
+    if (GitHubSync.isConfigured()) {
+      const remote = await GitHubSync.loadFromGitHub();
+      if (remote) await GitHubSync.applySyncData(remote);
+    }
+  } catch(e) { console.log('GitHub sync skipped:', e.message); }
+
   const pdfs = (await dbGetAll('pdfs')).sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999));
 
   // Check for missing files from registry

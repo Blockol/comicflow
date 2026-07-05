@@ -518,6 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (changed) {
         showToast('Reihenfolge aktualisiert');
+        GitHubSync.quickSave();
         loadPdfList();
       }
     }
@@ -1115,6 +1116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPageGrid(currentPdfRecord.pageCount);
     showToast(`Seite ${previewPage}: Musik zugewiesen`);
     ServerSync.saveMappingsToServer();
+    GitHubSync.quickSave();
   });
 
   document.getElementById('previewAssignBtn').addEventListener('click', async () => {
@@ -1129,6 +1131,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPageGrid(currentPdfRecord.pageCount);
     showToast(`Seite ${previewPage}: Musik zugewiesen`);
     ServerSync.saveMappingsToServer();
+    GitHubSync.quickSave();
   });
 
   document.getElementById('previewRemoveBtn').addEventListener('click', async () => {
@@ -1140,6 +1143,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('previewMusicSelect').value = '';
       showToast(`Seite ${previewPage}: Zuweisung entfernt`);
       ServerSync.saveMappingsToServer();
+    GitHubSync.quickSave();
     }
   });
 
@@ -1211,6 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPageGrid(pdf.pageCount);
     showToast('Musik zugewiesen');
     ServerSync.saveMappingsToServer();
+    GitHubSync.quickSave();
   });
 
   document.getElementById('assignRemoveBtn').addEventListener('click', async () => {
@@ -1226,6 +1231,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPageGrid(pdf.pageCount);
     showToast('Zuweisungen entfernt');
     ServerSync.saveMappingsToServer();
+    GitHubSync.quickSave();
   });
 
   document.getElementById('assignCancelBtn').addEventListener('click', () => {
@@ -1234,9 +1240,78 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAssignBar();
   });
 
+  // ══════════════════════════════
+  // ── GitHub Sync Tab ──
+  // ══════════════════════════════
+
+  function updateSyncUI() {
+    const tokenInput = document.getElementById('githubToken');
+    const statusDiv = document.getElementById('syncStatus');
+    const notConfigured = document.getElementById('syncNotConfigured');
+
+    if (GitHubSync.isConfigured()) {
+      tokenInput.value = '••••••••••••••••';
+      statusDiv.style.display = 'block';
+      notConfigured.style.display = 'none';
+    } else {
+      tokenInput.value = '';
+      statusDiv.style.display = 'none';
+      notConfigured.style.display = 'block';
+    }
+  }
+
+  document.getElementById('githubTokenSave').addEventListener('click', async () => {
+    const token = document.getElementById('githubToken').value.trim();
+    if (!token || token === '••••••••••••••••') {
+      showToast('Bitte Token eingeben', 'error');
+      return;
+    }
+
+    GitHubSync.setToken(token);
+    showToast('Token wird geprüft...');
+
+    const ok = await GitHubSync.testToken();
+    if (ok) {
+      showToast('Token gültig! Sync wird gestartet...');
+      updateSyncUI();
+      try {
+        await GitHubSync.sync();
+        showToast('Sync erfolgreich!');
+        document.getElementById('syncInfo').textContent = 'Letzter Sync: gerade eben';
+        loadPdfList();
+      } catch (e) {
+        showToast('Sync-Fehler: ' + e.message, 'error');
+      }
+    } else {
+      GitHubSync.removeToken();
+      showToast('Token ungültig oder keine Schreibrechte (repo Berechtigung nötig)', 'error');
+      updateSyncUI();
+    }
+  });
+
+  document.getElementById('syncNowBtn')?.addEventListener('click', async () => {
+    showToast('Synchronisiere...');
+    try {
+      await GitHubSync.sync();
+      showToast('Sync erfolgreich!');
+      document.getElementById('syncInfo').textContent = 'Letzter Sync: gerade eben';
+      loadPdfList();
+    } catch (e) {
+      showToast('Sync-Fehler: ' + e.message, 'error');
+    }
+  });
+
+  document.getElementById('syncDisconnect')?.addEventListener('click', () => {
+    if (!confirm('GitHub Sync trennen?')) return;
+    GitHubSync.removeToken();
+    updateSyncUI();
+    showToast('Sync getrennt');
+  });
+
   // ── Init ──
   loadPdfList();
   loadMusicList();
+  updateSyncUI();
 
   // Refresh music list after auto-import
   window.addEventListener('music-imported', () => loadMusicList());

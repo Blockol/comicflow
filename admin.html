@@ -33,6 +33,7 @@
         <button class="tab active" data-tab="pdfs">Comics / PDFs</button>
         <button class="tab" data-tab="music">Musik</button>
         <button class="tab" data-tab="assign">Zuweisungen</button>
+        <button class="tab" data-tab="sync">Sync</button>
       </div>
 
       <!-- Tab: PDFs -->
@@ -97,6 +98,42 @@
           </div>
         </div>
       </div>
+      <!-- Tab: Sync -->
+      <div class="tab-content" id="tab-sync">
+        <div class="admin-section">
+          <div class="admin-section-header">
+            <h2 class="admin-section-title">GitHub Sync</h2>
+          </div>
+          <p class="text-sm text-muted mb-2">
+            Synchronisiere Zuweisungen und Einstellungen &uuml;ber GitHub, damit alles auf jedem Ger&auml;t gleich ist.
+          </p>
+
+          <div class="form-group mt-3">
+            <label class="form-label">GitHub Personal Access Token</label>
+            <div style="display:flex;gap:0.5rem;">
+              <input type="password" class="form-input" id="githubToken" placeholder="ghp_xxxxxxxxxxxx" style="flex:1;">
+              <button class="btn btn-accent btn-sm" id="githubTokenSave">Speichern</button>
+            </div>
+            <p class="text-sm text-muted mt-1">
+              Erstelle einen Token unter <strong>GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens &rarr; Tokens (classic)</strong> mit <code>repo</code> Berechtigung.
+            </p>
+          </div>
+
+          <div id="syncStatus" class="mt-3" style="display:none;">
+            <div class="form-group">
+              <span class="pdf-status-badge synced" id="syncStatusBadge">Verbunden</span>
+              <button class="btn btn-sm" id="syncNowBtn" style="margin-left:0.5rem;">Jetzt synchronisieren</button>
+              <button class="btn btn-danger btn-sm" id="syncDisconnect" style="margin-left:0.5rem;">Trennen</button>
+            </div>
+            <div id="syncInfo" class="text-sm text-muted mt-2"></div>
+          </div>
+
+          <div id="syncNotConfigured" class="mt-3" style="display:none;">
+            <span class="pdf-status-badge missing">Nicht verbunden</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </main>
 
@@ -179,6 +216,7 @@
 
   <script src="js/db.js"></script>
   <script src="js/file-registry.js"></script>
+  <script src="js/github-sync.js"></script>
   <script src="js/server-sync.js"></script>
   <script src="js/auto-import.js"></script>
   <script src="js/admin.js"></script>
