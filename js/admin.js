@@ -1381,6 +1381,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // ── Fullscreen Setting ──
+  const fullscreenCheck = document.getElementById('fullscreenMode');
+  if (fullscreenCheck) {
+    fullscreenCheck.checked = localStorage.getItem('comicflow_fullscreen') === '1';
+    fullscreenCheck.addEventListener('change', () => {
+      localStorage.setItem('comicflow_fullscreen', fullscreenCheck.checked ? '1' : '0');
+      showToast(fullscreenCheck.checked ? 'Vollbild-Modus aktiviert' : 'Vollbild-Modus deaktiviert');
+    });
+  }
+
   // ── Init ──
   loadPdfList();
   loadMusicList();

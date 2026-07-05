@@ -128,6 +128,21 @@ async function init() {
 
   renderPage(state.currentPage);
   setupControls();
+
+  // Fullscreen mode (hides Android status bar)
+  if (localStorage.getItem('comicflow_fullscreen') === '1') {
+    const el = document.documentElement;
+    const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (rfs) {
+      rfs.call(el).catch(() => {
+        // Fullscreen requires user gesture on some browsers – defer to first tap
+        document.addEventListener('click', function enterFS() {
+          rfs.call(el).catch(() => {});
+          document.removeEventListener('click', enterFS);
+        }, { once: true });
+      });
+    }
+  }
 }
 
 // Page turn animation state
