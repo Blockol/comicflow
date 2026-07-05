@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastSync": "2026-07-05T19:49:15.677Z",
+  "lastSync": "2026-07-05T19:49:30.228Z",
   "mappings": [
     {
       "pdfName": "Iron Man 001 (1968) (digital) (Minutemen-Slayer)",
@@ -71,6 +71,11 @@
       "pdfName": "Iron Man 003 (1968) (digital) (Minutemen-Slayer)",
       "page": 10,
       "musicName": "The Final Stand (1)"
+    },
+    {
+      "pdfName": "Iron Man 003 (1968) (digital) (Minutemen-Slayer)",
+      "page": 14,
+      "musicName": "calm, light dramtic then action drop later"
     }
   ],
   "fileRegistry": [
