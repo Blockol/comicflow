@@ -890,6 +890,9 @@ select.form-input {
   border-radius: 4px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
   image-rendering: auto;
+  will-change: transform;
+}
+.reader-canvas-wrapper canvas.animating {
   transition: transform 0.35s ease;
 }
 

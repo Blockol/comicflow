@@ -369,9 +369,11 @@ function setupControls() {
     controls.style.transform = 'translateY(100%)';
     controls.style.opacity = '0';
 
-    // Slight zoom-in on canvas
+    // Slight zoom-in pulse animation
+    canvas.classList.add('animating');
     canvas.style.transform = 'scale(1.02)';
     setTimeout(() => { canvas.style.transform = ''; }, 350);
+    setTimeout(() => canvas.classList.remove('animating'), 700);
 
     container.style.paddingTop = '0';
     document.body.style.overflow = 'hidden';

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'comicflow-v13';
+const CACHE_NAME = 'comicflow-v14';
 const ASSETS = [
   './',
   './index.html',
