@@ -337,18 +337,18 @@ function setupControls() {
     masterGain.gain.setValueAtTime(state.volume, audioCtx.currentTime);
   };
 
-  // ── Immersive Mode + Pinch-to-Zoom ──
-  // Mode 1 (normal): nav + controls visible, swipe = page change
-  // Mode 2 (immersive): pinch-out → UI hidden, swipe = page change, can zoom further
-  // Pinch-in below 1x → back to mode 1
+  // ── Two reading modes ──
+  // Mode 1 (normal): nav + controls visible, swipe left/right = page change
+  // Mode 2 (immersive): swipe DOWN to enter → UI hidden, swipe left/right = page change
+  //                      pinch-to-zoom + pan works in this mode
+  //                      swipe UP to exit → back to mode 1
 
   let immersive = false;
-  let currentZoom = 1;     // zoom within immersive mode (1 = fit screen)
+  let currentZoom = 1;
   let initialPinchDist = 0;
   let pinchStartZoom = 1;
   let panX = 0, panY = 0, panStartX = 0, panStartY = 0;
   let isPanning = false;
-  let wasImmersiveBeforePinch = false;
   const wrapper = document.querySelector('.reader-canvas-wrapper');
   const container = document.getElementById('readerContainer');
   const nav = document.querySelector('.nav');
@@ -357,6 +357,8 @@ function setupControls() {
   function enterImmersive() {
     if (immersive) return;
     immersive = true;
+    currentZoom = 1; panX = 0; panY = 0;
+    canvas.style.transform = '';
     nav.style.display = 'none';
     controls.style.display = 'none';
     container.style.paddingTop = '0';
@@ -368,8 +370,7 @@ function setupControls() {
   function exitImmersive() {
     if (!immersive) return;
     immersive = false;
-    currentZoom = 1;
-    panX = 0; panY = 0;
+    currentZoom = 1; panX = 0; panY = 0;
     canvas.style.transform = '';
     nav.style.display = '';
     controls.style.display = '';
@@ -386,15 +387,15 @@ function setupControls() {
     canvas.style.transformOrigin = 'center center';
   }
 
+  // Pinch-to-zoom (only in immersive mode)
   wrapper.addEventListener('touchstart', e => {
-    if (e.touches.length === 2) {
+    if (e.touches.length === 2 && immersive) {
       e.preventDefault();
       initialPinchDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
       pinchStartZoom = currentZoom;
-      wasImmersiveBeforePinch = immersive;
     } else if (e.touches.length === 1 && immersive && currentZoom > 1.05) {
       isPanning = true;
       panStartX = e.touches[0].clientX - panX * currentZoom;
@@ -403,28 +404,14 @@ function setupControls() {
   }, { passive: false });
 
   wrapper.addEventListener('touchmove', e => {
-    if (e.touches.length === 2 && initialPinchDist > 0) {
+    if (e.touches.length === 2 && immersive && initialPinchDist > 0) {
       e.preventDefault();
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
-      const ratio = dist / initialPinchDist;
-
-      if (!immersive) {
-        // Mode 1: pinch-out enters immersive
-        if (ratio > 1.15) {
-          enterImmersive();
-          currentZoom = 1;
-          initialPinchDist = dist;
-          pinchStartZoom = 1;
-        }
-      } else {
-        // Mode 2: zoom within immersive
-        currentZoom = Math.max(0.5, Math.min(pinchStartZoom * ratio, 5));
-        if (currentZoom < 1) { panX = 0; panY = 0; }
-        applyTransform();
-      }
+      currentZoom = Math.max(1, Math.min(pinchStartZoom * (dist / initialPinchDist), 5));
+      applyTransform();
     } else if (e.touches.length === 1 && isPanning && currentZoom > 1.05) {
       e.preventDefault();
       panX = (e.touches[0].clientX - panStartX) / currentZoom;
@@ -434,43 +421,42 @@ function setupControls() {
   }, { passive: false });
 
   wrapper.addEventListener('touchend', e => {
-    if (e.touches.length < 2) {
-      // Pinch ended: check if we should exit immersive
-      if (immersive && currentZoom < 0.9) {
-        exitImmersive();
-      } else if (immersive && currentZoom < 1) {
-        currentZoom = 1;
-        panX = 0; panY = 0;
-        applyTransform();
-      }
-      initialPinchDist = 0;
-    }
+    if (e.touches.length < 2) initialPinchDist = 0;
     if (e.touches.length === 0) isPanning = false;
   });
 
-  // Touch/swipe for page navigation (works in both modes when not zoomed)
+  // Swipe gestures: left/right = page, down = immersive, up = exit immersive
   let touchStartX = 0;
   let touchStartY = 0;
-  let touchMoved = false;
 
   wrapper.addEventListener('touchstart', e => {
-    if (e.touches.length === 1 && (!immersive || currentZoom <= 1.05)) {
+    if (e.touches.length === 1) {
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
-      touchMoved = false;
     }
   }, { passive: true });
 
-  wrapper.addEventListener('touchmove', e => {
-    if (e.touches.length === 1) touchMoved = true;
-  }, { passive: true });
-
   wrapper.addEventListener('touchend', e => {
-    if (e.touches.length === 0 && touchMoved && (!immersive || currentZoom <= 1.05)) {
-      const diffX = e.changedTouches[0].clientX - touchStartX;
-      const diffY = e.changedTouches[0].clientY - touchStartY;
-      if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY)) {
-        if (diffX > 0) { goPrev(); } else { goNext(); }
+    if (e.touches.length > 0) return;
+    // Skip if we were pinching or panning while zoomed
+    if (immersive && currentZoom > 1.05) return;
+
+    const diffX = e.changedTouches[0].clientX - touchStartX;
+    const diffY = e.changedTouches[0].clientY - touchStartY;
+    const absX = Math.abs(diffX);
+    const absY = Math.abs(diffY);
+
+    if (absX > absY && absX > 50) {
+      // Horizontal swipe: page change (both modes)
+      if (diffX > 0) goPrev(); else goNext();
+    } else if (absY > absX && absY > 60) {
+      // Vertical swipe
+      if (diffY > 0 && !immersive) {
+        // Swipe DOWN: enter immersive
+        enterImmersive();
+      } else if (diffY < 0 && immersive) {
+        // Swipe UP: exit immersive
+        exitImmersive();
       }
     }
   }, { passive: true });
