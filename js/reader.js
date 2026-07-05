@@ -130,11 +130,46 @@ async function init() {
   setupControls();
 }
 
-async function renderPage(num) {
-  if (state.fileType === 'cbr') {
-    await renderCBRPage(num);
+// Page turn animation state
+let turnAnimTimer = null;
+let lastTurnTime = 0;
+const PAGE_TURN_ENABLED = () => localStorage.getItem('comicflow_page_turn_anim') === '1';
+
+async function renderPage(num, direction) {
+  const doAnim = PAGE_TURN_ENABLED() && direction;
+
+  if (doAnim) {
+    // Speed up animation if flipping fast (< 600ms between flips)
+    const now = Date.now();
+    const timeSinceLast = now - lastTurnTime;
+    lastTurnTime = now;
+    const speed = timeSinceLast < 600 ? '0.2s' : '0.4s';
+    const halfSpeed = timeSinceLast < 600 ? 100 : 200;
+
+    // Cancel any running animation
+    if (turnAnimTimer) { clearTimeout(turnAnimTimer); turnAnimTimer = null; }
+    canvas.classList.remove('page-turn-next', 'page-turn-prev');
+
+    // Force reflow to restart animation
+    void canvas.offsetWidth;
+
+    canvas.style.setProperty('--turn-speed', speed);
+    canvas.classList.add(direction === 'next' ? 'page-turn-next' : 'page-turn-prev');
+
+    // Render new page at the midpoint of the animation (when canvas is "edge-on")
+    turnAnimTimer = setTimeout(async () => {
+      if (state.fileType === 'cbr') await renderCBRPage(num);
+      else await renderPDFPage(num);
+    }, halfSpeed);
+
+    // Remove animation class when done
+    setTimeout(() => {
+      canvas.classList.remove('page-turn-next', 'page-turn-prev');
+      turnAnimTimer = null;
+    }, halfSpeed * 2 + 50);
   } else {
-    await renderPDFPage(num);
+    if (state.fileType === 'cbr') await renderCBRPage(num);
+    else await renderPDFPage(num);
   }
 
   document.getElementById('pageInfo').textContent = `${num} / ${state.totalPages}`;
@@ -311,14 +346,14 @@ function setupControls() {
   prevBtn.onclick = () => {
     if (state.currentPage > 1) {
       state.currentPage--;
-      renderPage(state.currentPage);
+      renderPage(state.currentPage, 'prev');
     }
   };
 
   nextBtn.onclick = () => {
     if (state.currentPage < state.totalPages) {
       state.currentPage++;
-      renderPage(state.currentPage);
+      renderPage(state.currentPage, 'next');
     }
   };
 
@@ -501,7 +536,7 @@ function setupControls() {
     if (state.currentPage > 1) {
       if (immersive) { currentZoom = 1; panX = 0; panY = 0; applyTransform(); }
       state.currentPage--;
-      renderPage(state.currentPage);
+      renderPage(state.currentPage, 'prev');
     }
   }
 
@@ -509,7 +544,7 @@ function setupControls() {
     if (state.currentPage < state.totalPages) {
       if (immersive) { currentZoom = 1; panX = 0; panY = 0; applyTransform(); }
       state.currentPage++;
-      renderPage(state.currentPage);
+      renderPage(state.currentPage, 'next');
     }
   }
 
