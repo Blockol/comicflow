@@ -1,4 +1,4 @@
-const CACHE_NAME = 'comicflow-v7';
+const CACHE_NAME = 'comicflow-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -9,6 +9,10 @@ const ASSETS = [
   './js/app.js',
   './js/reader.js',
   './js/admin.js',
+  './js/github-sync.js',
+  './js/server-sync.js',
+  './js/file-registry.js',
+  './js/auto-import.js',
   './lib/unrar.js',
   './lib/unrar-bundle.js',
   './manifest.json'

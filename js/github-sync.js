@@ -35,42 +35,36 @@ const GitHubSync = (() => {
     };
   }
 
-  // Read sync data from GitHub (API with token, or fallback to Pages URL)
+  // Read sync data from GitHub
+  // With token: uses API (sets SHA for writes). Without: raw URL fallback (read-only).
   async function loadFromGitHub() {
-    // Try API first (needed for SHA to enable writes)
     if (getToken()) {
-      try {
-        const res = await fetch(
-          `${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${SYNC_FILE}`,
-          { headers: headers() }
-        );
+      const res = await fetch(
+        `${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${SYNC_FILE}`,
+        { headers: headers() }
+      );
 
-        if (res.status === 404) {
-          _fileSha = null;
-          return null;
-        }
-
-        if (res.ok) {
-          const data = await res.json();
-          _fileSha = data.sha;
-          const content = atob(data.content.replace(/\n/g, ''));
-          return JSON.parse(content);
-        }
-      } catch (e) {
-        console.warn('[GITHUB] API load failed, trying Pages fallback:', e.message);
+      if (res.status === 404) {
+        _fileSha = null;
+        return null;
       }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `GitHub API ${res.status}`);
+      }
+
+      const data = await res.json();
+      _fileSha = data.sha;
+      const content = atob(data.content.replace(/\n/g, ''));
+      return JSON.parse(content);
     }
 
-    // Fallback: read from raw.githubusercontent.com (no token needed, always current)
-    try {
-      const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/master/${SYNC_FILE}?t=${Date.now()}`;
-      const res = await fetch(rawUrl);
-      if (!res.ok) return null;
-      return await res.json();
-    } catch (e) {
-      console.error('[GITHUB] Load failed:', e);
-      return null;
-    }
+    // No token: read from raw.githubusercontent.com (read-only, no SHA)
+    const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/master/${SYNC_FILE}?t=${Date.now()}`;
+    const res = await fetch(rawUrl);
+    if (!res.ok) return null;
+    return await res.json();
   }
 
   // Write sync data to GitHub
@@ -265,9 +259,11 @@ const GitHubSync = (() => {
     if (!isConfigured()) return;
     try {
       // Reload SHA first to avoid conflicts
-      try { await loadFromGitHub(); } catch {}
+      await loadFromGitHub();
       const data = await buildSyncData();
+      console.log('[GITHUB] Saving:', data.mappings.length, 'mappings,', data.fileRegistry.length, 'files');
       await saveToGitHub(data);
+      console.log('[GITHUB] Quick save OK');
     } catch (e) {
       console.error('[GITHUB] Quick save failed:', e);
     }
