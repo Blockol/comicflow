@@ -1,11 +1,16 @@
 {
   "version": 1,
-  "lastSync": "2026-07-05T19:12:37.411Z",
+  "lastSync": "2026-07-05T19:12:45.322Z",
   "mappings": [
     {
       "pdfName": "Iron Man 001 (1968) (digital) (Minutemen-Slayer)",
       "page": 1,
       "musicName": "beneath the floor"
+    },
+    {
+      "pdfName": "Iron Man 003 (1968) (digital) (Minutemen-Slayer)",
+      "page": 1,
+      "musicName": "emotional, quit, light"
     }
   ],
   "fileRegistry": [
