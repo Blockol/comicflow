@@ -146,15 +146,19 @@ async function renderPage(num) {
 
 async function renderPDFPage(num) {
   const page = await state.pdfDoc.getPage(num);
-  const scale = Math.min(
-    (window.innerWidth * 0.9) / page.getViewport({ scale: 1 }).width,
+  const dpr = window.devicePixelRatio || 1;
+  const cssScale = Math.min(
+    (window.innerWidth * 0.95) / page.getViewport({ scale: 1 }).width,
     (window.innerHeight * 0.85) / page.getViewport({ scale: 1 }).height,
     2
   );
-  const viewport = page.getViewport({ scale });
+  const renderScale = cssScale * dpr;
+  const viewport = page.getViewport({ scale: renderScale });
 
   canvas.width = viewport.width;
   canvas.height = viewport.height;
+  canvas.style.width = (viewport.width / dpr) + 'px';
+  canvas.style.height = (viewport.height / dpr) + 'px';
 
   await page.render({ canvasContext: ctx, viewport }).promise;
 }
@@ -166,14 +170,17 @@ async function renderCBRPage(num) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(
-        (window.innerWidth * 0.9) / img.width,
+      const dpr = window.devicePixelRatio || 1;
+      const cssScale = Math.min(
+        (window.innerWidth * 0.95) / img.width,
         (window.innerHeight * 0.85) / img.height,
         2
       );
 
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
+      canvas.width = img.width * cssScale * dpr;
+      canvas.height = img.height * cssScale * dpr;
+      canvas.style.width = (img.width * cssScale) + 'px';
+      canvas.style.height = (img.height * cssScale) + 'px';
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(img.src);
       resolve();
@@ -330,19 +337,95 @@ function setupControls() {
     masterGain.gain.setValueAtTime(state.volume, audioCtx.currentTime);
   };
 
-  // Touch/swipe support
+  // ── Pinch-to-Zoom ──
+  let currentZoom = 1;
+  let initialPinchDist = 0;
+  let pinchStartZoom = 1;
+  let panX = 0, panY = 0, panStartX = 0, panStartY = 0;
+  let isPanning = false;
+  const wrapper = document.querySelector('.reader-canvas-wrapper');
+  const container = document.getElementById('readerContainer');
+  const nav = document.querySelector('.nav');
+  const controls = document.querySelector('.reader-controls');
+
+  function setZoom(z) {
+    currentZoom = Math.max(1, Math.min(z, 5));
+    if (currentZoom <= 1) { panX = 0; panY = 0; }
+    canvas.style.transform = `scale(${currentZoom}) translate(${panX}px, ${panY}px)`;
+    canvas.style.transformOrigin = 'center center';
+
+    // Hide/show UI when zoomed
+    const zoomed = currentZoom > 1.1;
+    nav.style.display = zoomed ? 'none' : '';
+    controls.style.display = zoomed ? 'none' : '';
+    container.style.paddingTop = zoomed ? '0' : '';
+    document.body.style.overflow = zoomed ? 'hidden' : '';
+  }
+
+  wrapper.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      initialPinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchStartZoom = currentZoom;
+    } else if (e.touches.length === 1 && currentZoom > 1.1) {
+      isPanning = true;
+      panStartX = e.touches[0].clientX - panX * currentZoom;
+      panStartY = e.touches[0].clientY - panY * currentZoom;
+    }
+  }, { passive: false });
+
+  wrapper.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      setZoom(pinchStartZoom * (dist / initialPinchDist));
+    } else if (e.touches.length === 1 && isPanning && currentZoom > 1.1) {
+      e.preventDefault();
+      panX = (e.touches[0].clientX - panStartX) / currentZoom;
+      panY = (e.touches[0].clientY - panStartY) / currentZoom;
+      canvas.style.transform = `scale(${currentZoom}) translate(${panX}px, ${panY}px)`;
+    }
+  }, { passive: false });
+
+  wrapper.addEventListener('touchend', e => {
+    if (e.touches.length < 2) initialPinchDist = 0;
+    if (e.touches.length === 0) isPanning = false;
+    // Reset zoom on double-tap
+    if (currentZoom <= 1) {
+      panX = 0; panY = 0;
+    }
+  });
+
+  // Touch/swipe for page navigation (only when not zoomed)
   let touchStartX = 0;
   canvas.addEventListener('touchstart', e => {
-    touchStartX = e.touches[0].clientX;
+    if (currentZoom <= 1.1 && e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+    }
   }, { passive: true });
 
   canvas.addEventListener('touchend', e => {
-    const diff = e.changedTouches[0].clientX - touchStartX;
-    if (Math.abs(diff) > 50) {
-      if (diff > 0) prevBtn.click();
-      else nextBtn.click();
+    if (currentZoom <= 1.1) {
+      const diff = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) prevBtn.click();
+        else nextBtn.click();
+      }
     }
   }, { passive: true });
+
+  // Reset zoom on page change
+  const origRenderPage = window.renderPage;
+  const prevOnclick = prevBtn.onclick;
+  const nextOnclick = nextBtn.onclick;
+  prevBtn.onclick = () => { setZoom(1); prevOnclick(); };
+  nextBtn.onclick = () => { setZoom(1); nextOnclick(); };
 
   // Click on canvas to resume AudioContext (autoplay policy)
   canvas.addEventListener('click', () => {
