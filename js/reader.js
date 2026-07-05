@@ -82,6 +82,22 @@ const state = {
 const canvas = document.getElementById('pdfCanvas');
 const ctx = canvas.getContext('2d');
 
+function requestAppFullscreen() {
+  const el = document.documentElement;
+  const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (!rfs) return;
+  // On mobile, fullscreen always requires a user gesture – listen for first interaction
+  function enterFS() {
+    rfs.call(el).catch(() => {});
+    document.removeEventListener('click', enterFS);
+    document.removeEventListener('touchstart', enterFS);
+  }
+  document.addEventListener('click', enterFS, { once: false });
+  document.addEventListener('touchstart', enterFS, { once: false });
+  // Also try immediately (works if init was triggered by a gesture)
+  rfs.call(el).catch(() => {});
+}
+
 async function init() {
   const params = new URLSearchParams(window.location.search);
   state.pdfId = Number(params.get('id'));
@@ -131,17 +147,7 @@ async function init() {
 
   // Fullscreen mode (hides Android status bar)
   if (localStorage.getItem('comicflow_fullscreen') === '1') {
-    const el = document.documentElement;
-    const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    if (rfs) {
-      rfs.call(el).catch(() => {
-        // Fullscreen requires user gesture on some browsers – defer to first tap
-        document.addEventListener('click', function enterFS() {
-          rfs.call(el).catch(() => {});
-          document.removeEventListener('click', enterFS);
-        }, { once: true });
-      });
-    }
+    requestAppFullscreen();
   }
 }
 
