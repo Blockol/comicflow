@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastSync": "2026-07-05T19:22:35.284Z",
+  "lastSync": "2026-07-05T19:22:38.543Z",
   "mappings": [
     {
       "pdfName": "Iron Man 001 (1968) (digital) (Minutemen-Slayer)",
@@ -14,12 +14,12 @@
     },
     {
       "pdfName": "Iron Man 003 (1968) (digital) (Minutemen-Slayer)",
-      "page": 4,
-      "musicName": "light dramatic, long walk, building up but no drop, evil plan"
+      "page": 1,
+      "musicName": "The Room Next Door"
     },
     {
       "pdfName": "Iron Man 003 (1968) (digital) (Minutemen-Slayer)",
-      "page": 1,
+      "page": 4,
       "musicName": "The Room Next Door"
     }
   ],
