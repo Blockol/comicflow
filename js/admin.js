@@ -866,31 +866,75 @@ document.addEventListener('DOMContentLoaded', () => {
       <li class="music-item">
         <div class="music-item-info">
           <div class="music-item-icon">&#9835;</div>
-          <span class="music-item-name">${m.name}</span>
+          <div class="music-item-text">
+            <span class="music-item-name">${m.name}</span>
+            ${m.description ? `<span class="music-item-desc">${m.description}</span>` : '<span class="music-item-desc music-item-desc-empty">Keine Beschreibung</span>'}
+          </div>
         </div>
         <div class="music-item-actions">
-          <button class="btn btn-sm" onclick="previewMusic(${m.id})">&#9654; Probe</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteMusic(${m.id})">Löschen</button>
+          <button class="btn btn-sm" id="previewBtn-${m.id}" onclick="togglePreview(${m.id})">&#9654; Probe</button>
+          <button class="btn btn-sm" onclick="editMusicDesc(${m.id})">Beschreibung</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMusic(${m.id})">L&ouml;schen</button>
         </div>
       </li>
     `).join('');
   }
 
   let previewAudio = null;
-  window.previewMusic = async (id) => {
-    if (previewAudio) { previewAudio.pause(); previewAudio = null; }
+  let previewingId = null;
+
+  window.togglePreview = async (id) => {
+    const btn = document.getElementById(`previewBtn-${id}`);
+
+    // If same track is playing, stop it
+    if (previewAudio && previewingId === id) {
+      previewAudio.pause();
+      previewAudio = null;
+      previewingId = null;
+      if (btn) btn.innerHTML = '&#9654; Probe';
+      return;
+    }
+
+    // Stop any playing track
+    if (previewAudio) {
+      previewAudio.pause();
+      const oldBtn = document.getElementById(`previewBtn-${previewingId}`);
+      if (oldBtn) oldBtn.innerHTML = '&#9654; Probe';
+      previewAudio = null;
+    }
+
     const m = await dbGet('music', id);
     if (!m) return;
     const blob = new Blob([m.data], { type: m.type || 'audio/mpeg' });
     previewAudio = new Audio(URL.createObjectURL(blob));
     previewAudio.volume = 0.5;
+    previewingId = id;
+    if (btn) btn.innerHTML = '&#9632; Stop';
+
+    previewAudio.onended = () => {
+      previewAudio = null;
+      previewingId = null;
+      if (btn) btn.innerHTML = '&#9654; Probe';
+    };
+
     previewAudio.play();
-    setTimeout(() => { if (previewAudio) { previewAudio.pause(); previewAudio = null; } }, 15000);
+  };
+
+  window.editMusicDesc = async (id) => {
+    const m = await dbGet('music', id);
+    if (!m) return;
+    const desc = prompt('Beschreibung:', m.description || '');
+    if (desc === null) return; // cancelled
+    m.description = desc.trim();
+    await dbUpdate('music', m);
+    showToast('Beschreibung gespeichert');
+    loadMusicList();
+    GitHubSync.quickSave();
   };
 
   window.deleteMusic = async (id) => {
     if (!confirm('Musik wirklich löschen?')) return;
-    if (previewAudio) { previewAudio.pause(); previewAudio = null; }
+    if (previewAudio) { previewAudio.pause(); previewAudio = null; previewingId = null; }
     await dbDelete('music', id);
     showToast('Musik gelöscht');
     loadMusicList();
@@ -910,7 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const musicSelect = document.getElementById('assignMusicSelect');
     musicSelect.innerHTML = '<option value="">-- Musik wählen --</option>' +
-      allMusic.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+      allMusic.map(m => `<option value="${m.id}">${m.name}${m.description ? ' — ' + m.description : ''}</option>`).join('');
   }
 
   document.getElementById('assignPdfSelect').addEventListener('change', async (e) => {
@@ -1021,7 +1065,9 @@ document.addEventListener('DOMContentLoaded', () => {
       cell.dataset.page = i;
 
       const mapping = currentMappings.find(m => m.page === i);
-      const musicName = mapping ? (allMusic.find(m => m.id === mapping.musicId)?.name || '?') : '';
+      const musicEntry = mapping ? allMusic.find(m => m.id === mapping.musicId) : null;
+      const musicName = musicEntry ? musicEntry.name : '';
+      const musicDesc = musicEntry?.description || '';
 
       if (mapping) cell.classList.add('has-music');
       if (selectedPages.has(i)) cell.classList.add('selected');
@@ -1030,7 +1076,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="page-cell-thumb" id="thumb-${i}"></div>
         <div class="page-cell-info">
           <span class="page-cell-number">${i}</span>
-          ${musicName ? `<span class="page-cell-music">${musicName}</span>` : ''}
+          ${musicName ? `<span class="page-cell-music" title="${musicDesc}">${musicName}${musicDesc ? ' — ' + musicDesc : ''}</span>` : ''}
           <button class="page-cell-preview-btn" data-preview="${i}" title="Vorschau">&#9974;</button>
         </div>
       `;
@@ -1069,7 +1115,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Populate music select
     musicSelect.innerHTML = '<option value="">-- Musik --</option>' +
-      allMusic.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+      allMusic.map(m => `<option value="${m.id}">${m.name}${m.description ? ' — ' + m.description : ''}</option>`).join('');
 
     // Set current music if assigned
     const mapping = currentMappings.find(m => m.page === pageNum);

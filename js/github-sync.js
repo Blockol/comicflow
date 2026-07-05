@@ -148,11 +148,17 @@ const GitHubSync = (() => {
       cover: p.cover || null,
     }));
 
+    // Build music descriptions
+    const musicDescriptions = music
+      .filter(m => m.description)
+      .map(m => ({ name: m.name, description: m.description }));
+
     return {
       version: 1,
       lastSync: new Date().toISOString(),
       mappings: syncMappings,
       fileRegistry: syncRegistry,
+      musicDescriptions: musicDescriptions,
     };
   }
 
@@ -191,6 +197,15 @@ const GitHubSync = (() => {
         }
       }
       console.log(`[GITHUB] ${syncData.mappings.length} Zuweisungen importiert`);
+    }
+
+    // Apply music descriptions
+    for (const md of syncData.musicDescriptions || []) {
+      const mus = music.find(m => m.name === md.name);
+      if (mus && mus.description !== md.description) {
+        mus.description = md.description;
+        await dbUpdate('music', mus);
+      }
     }
 
     // Update file registry in localStorage too

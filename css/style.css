@@ -732,12 +732,32 @@ select.form-input {
   font-size: 0.9rem;
 }
 
+.music-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
 .music-item-name {
   font-size: 0.85rem;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.music-item-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-item-desc-empty {
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .music-item-actions {
