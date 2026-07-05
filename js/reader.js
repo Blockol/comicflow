@@ -406,33 +406,40 @@ function setupControls() {
     canvas.style.transformOrigin = 'center center';
   }
 
-  // Pinch-to-zoom (only in immersive mode)
+  // Pinch-to-zoom (both modes) + pan when zoomed
+  let didPinchOrPan = false;
+
   wrapper.addEventListener('touchstart', e => {
-    if (e.touches.length === 2 && immersive) {
+    if (e.touches.length === 2) {
       e.preventDefault();
+      didPinchOrPan = true;
       initialPinchDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
       pinchStartZoom = currentZoom;
-    } else if (e.touches.length === 1 && immersive && currentZoom > 1.05) {
+    } else if (e.touches.length === 1 && currentZoom > 1.05) {
       isPanning = true;
+      didPinchOrPan = true;
       panStartX = e.touches[0].clientX - panX * currentZoom;
       panStartY = e.touches[0].clientY - panY * currentZoom;
     }
   }, { passive: false });
 
   wrapper.addEventListener('touchmove', e => {
-    if (e.touches.length === 2 && immersive && initialPinchDist > 0) {
+    if (e.touches.length === 2 && initialPinchDist > 0) {
       e.preventDefault();
+      didPinchOrPan = true;
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
       currentZoom = Math.max(1, Math.min(pinchStartZoom * (dist / initialPinchDist), 5));
+      if (currentZoom <= 1) { panX = 0; panY = 0; }
       applyTransform();
     } else if (e.touches.length === 1 && isPanning && currentZoom > 1.05) {
       e.preventDefault();
+      didPinchOrPan = true;
       panX = (e.touches[0].clientX - panStartX) / currentZoom;
       panY = (e.touches[0].clientY - panStartY) / currentZoom;
       applyTransform();
@@ -449,16 +456,17 @@ function setupControls() {
   let touchStartY = 0;
 
   wrapper.addEventListener('touchstart', e => {
-    if (e.touches.length === 1) {
+    if (e.touches.length === 1 && currentZoom <= 1.05) {
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
+      didPinchOrPan = false;
     }
   }, { passive: true });
 
   wrapper.addEventListener('touchend', e => {
     if (e.touches.length > 0) return;
-    // Skip if we were pinching or panning while zoomed
-    if (immersive && currentZoom > 1.05) return;
+    // Skip if we were zooming or panning
+    if (didPinchOrPan) { didPinchOrPan = false; return; }
 
     const diffX = e.changedTouches[0].clientX - touchStartX;
     const diffY = e.changedTouches[0].clientY - touchStartY;
@@ -473,8 +481,8 @@ function setupControls() {
       if (diffY > 0 && !immersive) {
         // Swipe DOWN: enter immersive
         enterImmersive();
-      } else if (diffY < 0 && immersive) {
-        // Swipe UP: exit immersive
+      } else if (diffY < 0 && immersive && currentZoom <= 1.05) {
+        // Swipe UP: exit immersive (only when not zoomed)
         exitImmersive();
       }
     }
