@@ -1,4 +1,4 @@
-const CACHE_NAME = 'comicflow-v8';
+const CACHE_NAME = 'comicflow-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -34,6 +34,13 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request, { cache: 'no-cache' })
+      .then(res => {
+        // Update cache with fresh response
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
