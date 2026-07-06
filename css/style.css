@@ -879,11 +879,17 @@ select.form-input {
   overflow: visible;
 }
 
-body.reader-light-bg .reader-container {
-  background: #ffffff;
+body.reader-light-bg {
+  background: #ffffff !important;
+}
+body.reader-light-bg .nav {
+  background: rgba(10, 10, 10, 0.95);
 }
 body.reader-light-bg .reader-canvas-wrapper canvas {
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
+}
+body.reader-light-bg .reader-controls {
+  background: rgba(10, 10, 10, 0.95);
 }
 
 .reader-canvas-wrapper {
