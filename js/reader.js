@@ -83,8 +83,6 @@ const canvas = document.getElementById('pdfCanvas');
 const ctx = canvas.getContext('2d');
 
 function requestAppFullscreen() {
-  // Only on touch devices (mobile/tablet)
-  if (!('ontouchstart' in window)) return;
   const el = document.documentElement;
   const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
   if (!rfs) return;
