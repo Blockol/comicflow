@@ -83,19 +83,21 @@ const canvas = document.getElementById('pdfCanvas');
 const ctx = canvas.getContext('2d');
 
 function requestAppFullscreen() {
+  // Only on touch devices (mobile/tablet)
+  if (!('ontouchstart' in window)) return;
   const el = document.documentElement;
   const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
   if (!rfs) return;
-  // On mobile, fullscreen always requires a user gesture – listen for first interaction
   function enterFS() {
-    rfs.call(el).catch(() => {});
-    document.removeEventListener('click', enterFS);
-    document.removeEventListener('touchstart', enterFS);
+    if (!document.fullscreenElement) {
+      rfs.call(el).catch(() => {});
+    }
+    document.removeEventListener('touchend', enterFS, true);
+    document.removeEventListener('click', enterFS, true);
   }
-  document.addEventListener('click', enterFS, { once: false });
-  document.addEventListener('touchstart', enterFS, { once: false });
-  // Also try immediately (works if init was triggered by a gesture)
-  rfs.call(el).catch(() => {});
+  // Use capture phase + touchend for best Android compatibility
+  document.addEventListener('touchend', enterFS, { capture: true, once: true });
+  document.addEventListener('click', enterFS, { capture: true, once: true });
 }
 
 async function init() {
