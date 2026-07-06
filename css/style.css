@@ -879,6 +879,13 @@ select.form-input {
   overflow: visible;
 }
 
+body.reader-light-bg .reader-container {
+  background: #ffffff;
+}
+body.reader-light-bg .reader-canvas-wrapper canvas {
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
+}
+
 .reader-canvas-wrapper {
   position: relative;
   max-width: 900px;

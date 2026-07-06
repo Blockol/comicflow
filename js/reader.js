@@ -142,6 +142,11 @@ async function init() {
   const saved = localStorage.getItem(`comicflow_page_${state.pdfId}`);
   if (saved) state.currentPage = Math.min(Number(saved), state.totalPages);
 
+  // White background setting
+  if (localStorage.getItem('comicflow_reader_light_bg') === '1') {
+    document.body.classList.add('reader-light-bg');
+  }
+
   renderPage(state.currentPage);
   setupControls();
 

@@ -1391,6 +1391,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // ── Reader Light Background Setting ──
+  const lightBgCheck = document.getElementById('readerLightBg');
+  if (lightBgCheck) {
+    lightBgCheck.checked = localStorage.getItem('comicflow_reader_light_bg') === '1';
+    lightBgCheck.addEventListener('change', () => {
+      localStorage.setItem('comicflow_reader_light_bg', lightBgCheck.checked ? '1' : '0');
+      showToast(lightBgCheck.checked ? 'Weißer Hintergrund aktiviert' : 'Dunkler Hintergrund aktiviert');
+    });
+  }
+
   // ── Init ──
   loadPdfList();
   loadMusicList();
